@@ -546,7 +546,7 @@ function AdminPanel({ sesion }) {
   );
 }
 
-function ReservasApp({ sesion, sectorSesion, onLogout }) {
+function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   const [vista, setVista] = useState("dia");
   const [reservas, setReservas] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -697,6 +697,9 @@ function ReservasApp({ sesion, sectorSesion, onLogout }) {
                 {sectorSesion && sesion.rol !== "admin" ? ` · ${sectorSesion}` : ""}
               </span>
               <button onClick={cargarReservas} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px" }}>↻ Actualizar</button>
+              {sesion.rol !== "admin" && (
+                <button onClick={onCambiarSector} title="Cambiar sector" style={{ ...btn("ghost"), fontSize: 16, padding: "4px 10px", color: "#b8914a", borderColor: "#3a2e1a" }}>🏠</button>
+              )}
             </div>
             {cargando ? <Spinner /> : reservasFiltradas.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 20px", color: "#4a3a22", border: "1px dashed #2a1e0a", borderRadius: 6 }}>
@@ -866,5 +869,5 @@ export default function Root() {
     return <SeleccionSector sesion={sesion} onSectorElegido={setSector} />;
   }
 
-  return <ReservasApp sesion={sesion} sectorSesion={sector} onLogout={handleLogout} />;
+  return <ReservasApp sesion={sesion} sectorSesion={sector} onLogout={handleLogout} onCambiarSector={() => setSector(null)} />;
 }
