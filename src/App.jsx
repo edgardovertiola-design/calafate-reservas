@@ -126,6 +126,7 @@ function parsearTodosClientes(texto) {
 }
 
 function estaEnListaNegra(cliente, listaNegra) {
+  if (!Array.isArray(listaNegra)) return null;
   const n = s => s?.toLowerCase().trim() || "";
   return listaNegra.find(ln =>
     (n(ln.rut) === n(cliente.rut) && n(cliente.rut) !== "") ||
@@ -523,7 +524,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   useEffect(() => { cargarReservas(); cargarListaNegra(); }, [fechaSeleccionada]);
 
   const cargarReservas = async () => { setCargando(true); const data = await db.get("reservas", `fecha=eq.${fechaSeleccionada}&select=*&order=nombre.asc`); setReservas(data); setCargando(false); };
-  const cargarListaNegra = async () => { const data = await db.get("lista_negra", "select=*"); setListaNegra(data); };
+  const cargarListaNegra = async () => { const data = await db.get("lista_negra", "select=*"); setListaNegra(Array.isArray(data) ? data : []); };
 
   const reservasFiltradas = useMemo(() => sesion.rol === "admin" ? reservas : reservas.filter(r => { const mesa = MESAS.find(m => m.id === r.mesa_id); return mesa?.zona === sectorSesion; }), [reservas, sesion.rol, sectorSesion]);
   const mesasDisponibles = () => { const ocupadas = reservas.map(r => r.mesa_id); return MESAS.filter(m => !ocupadas.includes(m.id)); };
