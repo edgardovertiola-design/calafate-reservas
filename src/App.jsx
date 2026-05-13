@@ -573,10 +573,16 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
       mesa_id: parseInt(form.mesa_id), nota: form.nota.trim(),
       participantes: clientesParsed.slice(1),
     });
-    setFechaSeleccionada(form.fecha);
-    setVista("dia");
+    const fechaReserva = form.fecha;
     setTextoCliente(""); setClientesParsed([]); setAlertaListaNegra([]);
     setForm({ fecha: today(), personas: 2, mesa_id: "", nota: "" });
+    // Cargar reservas directamente antes de cambiar de vista
+    setCargando(true);
+    const dataFresh = await db.get("reservas", `fecha=eq.${fechaReserva}&select=*&order=nombre.asc`);
+    setReservas(dataFresh);
+    setCargando(false);
+    setFechaSeleccionada(fechaReserva);
+    setVista("dia");
     flash("¡Reserva creada correctamente!");
   };
 
