@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 
-const SUPA_URL = "https://joqzusodfkvjthqwlepq.supabase.co";
-const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpvcXp1c29kZmt2anRocXdsZXBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NDA1MjcsImV4cCI6MjA5NDIxNjUyN30.f6GrQQWGpFjVvwdbXkqi8UF6DEGm8yaPXNAzGKL1t-Q";
+const SUPA_URL = "https://qykzlpayqninzhhwbrjd.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF5a3pscGF5cW5pbnpoaHdicmpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2MzAwNjMsImV4cCI6MjA5NDIwNjA2M30.hgDW2azvG4JmOig5VKD64f4NEYiVqeMmxjn9y2JrgSU";
 
 const headers = {
   "Content-Type": "application/json",
