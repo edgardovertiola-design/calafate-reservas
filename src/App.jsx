@@ -72,9 +72,23 @@ const MESA_POS = {
 const SECTORES = ["Sector Isla", "Sector Pantallas", "Sector Escape", "Sector DJ"];
 
 const fechaNoche = () => {
+  // Usar hora local del navegador, no UTC
   const ahora = new Date();
-  if (ahora.getHours() < 5) ahora.setDate(ahora.getDate() - 1);
-  return ahora.toISOString().split("T")[0];
+  const horaLocal = ahora.getHours();
+  const year = ahora.getFullYear();
+  const month = String(ahora.getMonth() + 1).padStart(2, "0");
+  const day = String(ahora.getDate()).padStart(2, "0");
+  const hoy = `${year}-${month}-${day}`;
+  if (horaLocal < 5) {
+    // Antes de las 5am, la noche corresponde al día anterior
+    const ayer = new Date(ahora);
+    ayer.setDate(ayer.getDate() - 1);
+    const y = ayer.getFullYear();
+    const m = String(ayer.getMonth() + 1).padStart(2, "0");
+    const d = String(ayer.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  return hoy;
 };
 
 const today = fechaNoche;
