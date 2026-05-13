@@ -8,6 +8,8 @@ const headers = {
   "apikey": SUPA_KEY,
   "Authorization": `Bearer ${SUPA_KEY}`,
   "Prefer": "return=representation",
+  "Accept-Profile": "public",
+  "Content-Profile": "public",
 };
 
 const db = {
