@@ -144,7 +144,6 @@ function FloorMap({ reservas, fecha, hora, onMesaClick, mesaSeleccionada }) {
           <div style={{ width: 12, height: 12, borderRadius: 2, background: "#f5e6c8", border: "2px solid #f5d060" }} />
           Seleccionada
         </div>
-< truncated lines 147-465 >
                 {tab.label}
               </button>
             ))}
