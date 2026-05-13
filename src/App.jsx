@@ -67,27 +67,15 @@ const MESA_POS = {
   54: { x: 80, y: 79 }, 55: { x: 80, y: 88 }, 56: { x: 80, y: 97 },
 };
 
-const ZONA_COLOR = {
-  "Sector Isla":      "#c026a0",
-  "Sector Pantallas": "#6d28d9",
-  "Sector Escape":    "#2563eb",
-  "Sector DJ":        "#1e3a8a",
-};
-
 const SECTORES = ["Sector Isla", "Sector Pantallas", "Sector Escape", "Sector DJ"];
 
-// Determina la fecha de "noche" correcta considerando que el local cierra a las 5am
-// Si son las 5am o antes, la noche corresponde al día anterior
 const fechaNoche = () => {
   const ahora = new Date();
-  if (ahora.getHours() < 5) {
-    ahora.setDate(ahora.getDate() - 1);
-  }
+  if (ahora.getHours() < 5) ahora.setDate(ahora.getDate() - 1);
   return ahora.toISOString().split("T")[0];
 };
 
 const today = fechaNoche;
-
 const ADMIN_DEFAULT = { id: "admin", usuario: "admin", password: "admin123", rol: "admin", nombre: "Administrador" };
 
 const inp = {
@@ -108,9 +96,7 @@ const btn = (v = "gold") => ({
 function Field({ label, children }) {
   return (
     <div>
-      <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 6 }}>
-        {label}
-      </label>
+      <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 6 }}>{label}</label>
       {children}
     </div>
   );
@@ -125,52 +111,42 @@ function Spinner() {
   );
 }
 
-// Parser de texto: "Nombre Apellido 12.345.678-9"
-function parsearCliente(texto) {
-  const partes = texto.trim().split(/\s+/);
-  // El RUT es el último token (contiene punto o guión)
+function parsearLinea(linea) {
+  const partes = linea.trim().split(/\s+/);
+  if (partes.length < 2) return null;
   const rutIndex = partes.findIndex(p => /[\.\-]/.test(p) || /^\d{7,8}[kK\d]$/.test(p));
   if (rutIndex === -1) {
-    // No se encontró RUT claro, intentar con el último token
-    const rut = partes[partes.length - 1] || "";
-    const nombre = partes[0] || "";
-    const apellido = partes.slice(1, partes.length - 1).join(" ") || "";
-    return { nombre, apellido, rut };
+    return { nombre: partes[0] || "", apellido: partes.slice(1, partes.length - 1).join(" ") || "", rut: partes[partes.length - 1] || "" };
   }
-  const rut = partes[rutIndex];
-  const nombre = partes[0] || "";
-  const apellido = partes.slice(1, rutIndex).join(" ") || "";
-  return { nombre, apellido, rut };
+  return { nombre: partes[0] || "", apellido: partes.slice(1, rutIndex).join(" ") || "", rut: partes[rutIndex] };
+}
+
+function parsearTodosClientes(texto) {
+  return texto.split("\n").map(l => l.trim()).filter(l => l.length > 0).map(parsearLinea).filter(Boolean);
+}
+
+function estaEnListaNegra(cliente, listaNegra) {
+  const n = s => s?.toLowerCase().trim() || "";
+  return listaNegra.find(ln =>
+    (n(ln.rut) === n(cliente.rut) && n(cliente.rut) !== "") ||
+    (n(ln.nombre) === n(cliente.nombre) && n(ln.apellido) === n(cliente.apellido) && n(cliente.nombre) !== "")
+  ) || null;
 }
 
 function FloorMap({ reservas, fecha, onMesaClick, mesaSeleccionada, soloZona }) {
-  // Una mesa está ocupada si tiene cualquier reserva en esa fecha
   const ocupadas = reservas.filter(r => r.fecha === fecha).map(r => r.mesa_id);
   const [tooltip, setTooltip] = useState(null);
-
-  const mesasFiltradas = soloZona ? MESAS.filter(m => m.zona === soloZona) : MESAS;
 
   return (
     <div style={{ width: "100%", position: "relative" }}>
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#9a8a6a" }}>
-          <div style={{ width: 12, height: 12, borderRadius: 2, background: "#d4a017", border: "1px solid #fbbf24" }} />
-          Disponible
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#9a8a6a" }}>
-          <div style={{ width: 12, height: 12, borderRadius: 2, background: "#cb7e7e", border: "1px solid #ff4444" }} />
-          Ocupada
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#9a8a6a" }}>
-          <div style={{ width: 12, height: 12, borderRadius: 2, background: "#f5e6c8", border: "2px solid #f5d060" }} />
-          Seleccionada
-        </div>
+        {[["#d4a017","#fbbf24","Disponible"],["#cb7e7e","#ff4444","Ocupada"],["#f5e6c8","#f5d060","Seleccionada"]].map(([bg, bd, label]) => (
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#9a8a6a" }}>
+            <div style={{ width: 12, height: 12, borderRadius: 2, background: bg, border: `1px solid ${bd}` }} />{label}
+          </div>
+        ))}
       </div>
-      <div style={{
-        position: "relative", width: "100%", paddingBottom: "70%",
-        background: "linear-gradient(160deg, #1a0a2e 0%, #0f0a20 40%, #0a0a1a 100%)",
-        border: "1px solid #2a1a4a", borderRadius: 10, overflow: "hidden",
-      }}>
+      <div style={{ position: "relative", width: "100%", paddingBottom: "70%", background: "linear-gradient(160deg, #1a0a2e 0%, #0f0a20 40%, #0a0a1a 100%)", border: "1px solid #2a1a4a", borderRadius: 10, overflow: "hidden" }}>
         <div style={{ position: "absolute", top: "2%", left: "20%", width: "60%", height: "8%", background: "#3b1f6a", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <span style={{ fontSize: 10, color: "#c4b5fd", letterSpacing: 3, textTransform: "uppercase" }}>Sector Pantalla</span>
         </div>
@@ -201,13 +177,11 @@ function FloorMap({ reservas, fecha, onMesaClick, mesaSeleccionada, soloZona }) 
         {MESAS.map(mesa => {
           const pos = MESA_POS[mesa.id];
           if (!pos) return null;
-          // Si hay filtro de zona, atenuar las mesas de otras zonas
           const estaEnZona = !soloZona || mesa.zona === soloZona;
           const ocupada = ocupadas.includes(mesa.id);
           const seleccionada = mesaSeleccionada === mesa.id;
           return (
-            <div
-              key={mesa.id}
+            <div key={mesa.id}
               onClick={() => !ocupada && estaEnZona && onMesaClick && onMesaClick(mesa.id)}
               onMouseEnter={() => setTooltip(mesa.id)}
               onMouseLeave={() => setTooltip(null)}
@@ -227,12 +201,7 @@ function FloorMap({ reservas, fecha, onMesaClick, mesaSeleccionada, soloZona }) 
             >
               {mesa.id}
               {tooltip === mesa.id && (
-                <div style={{
-                  position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)",
-                  background: "#1a1208", border: "1px solid #3a2e1a", borderRadius: 4, padding: "5px 10px",
-                  whiteSpace: "nowrap", fontSize: 11, color: "#e8dcc8", pointerEvents: "none", zIndex: 20,
-                  fontFamily: "'Georgia', serif", fontWeight: "normal",
-                }}>
+                <div style={{ position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)", background: "#1a1208", border: "1px solid #3a2e1a", borderRadius: 4, padding: "5px 10px", whiteSpace: "nowrap", fontSize: 11, color: "#e8dcc8", pointerEvents: "none", zIndex: 20, fontFamily: "'Georgia', serif", fontWeight: "normal" }}>
                   Mesa {mesa.id} · {mesa.zona}<br />
                   <span style={{ color: ocupada ? "#f87171" : "#7ecb7e" }}>{ocupada ? "Ocupada" : "Disponible"}</span>
                 </div>
@@ -253,34 +222,20 @@ function Login({ onLogin }) {
   const [adminCreds, setAdminCreds] = useState(null);
 
   useEffect(() => {
-    // Cargar credenciales de admin desde Supabase si existen
-    db.get("admin_config", "select=*").then(data => {
-      if (data && data.length > 0) setAdminCreds(data[0]);
-    }).catch(() => {});
+    db.get("admin_config", "select=*").then(data => { if (data && data.length > 0) setAdminCreds(data[0]); }).catch(() => {});
   }, []);
 
   const handleLogin = async () => {
-    setCargando(true);
-    setError("");
-    // Verificar admin
+    setCargando(true); setError("");
     const adminUsuario = adminCreds?.usuario || ADMIN_DEFAULT.usuario;
     const adminPassword = adminCreds?.password || ADMIN_DEFAULT.password;
-    if (usuario === adminUsuario && password === adminPassword) {
-      setCargando(false);
-      return onLogin({ ...ADMIN_DEFAULT, usuario: adminUsuario });
-    }
+    if (usuario === adminUsuario && password === adminPassword) { setCargando(false); return onLogin({ ...ADMIN_DEFAULT, usuario: adminUsuario }); }
     try {
       const data = await db.get("usuarios", `usuario=eq.${usuario}&password=eq.${password}&select=*`);
-      if (data.length === 0) {
-        setError("Usuario o contraseña incorrectos.");
-      } else if (!data[0].activo) {
-        setError("Tu cuenta está desactivada. Contacta al administrador.");
-      } else {
-        onLogin({ ...data[0], rol: "garzon" });
-      }
-    } catch {
-      setError("Error de conexión. Intenta de nuevo.");
-    }
+      if (data.length === 0) setError("Usuario o contraseña incorrectos.");
+      else if (!data[0].activo) setError("Tu cuenta está desactivada. Contacta al administrador.");
+      else onLogin({ ...data[0], rol: "garzon" });
+    } catch { setError("Error de conexión. Intenta de nuevo."); }
     setCargando(false);
   };
 
@@ -292,20 +247,10 @@ function Login({ onLogin }) {
         <div style={{ fontSize: 12, color: "#4a3a22", marginBottom: 44, letterSpacing: 4, textTransform: "uppercase" }}>Discoteca</div>
         <div style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 8, padding: 32 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <Field label="Usuario">
-              <input value={usuario} onChange={e => { setUsuario(e.target.value); setError(""); }} placeholder="Tu usuario" style={inp} onKeyDown={e => e.key === "Enter" && handleLogin()} />
-            </Field>
-            <Field label="Contraseña">
-              <input type="password" value={password} onChange={e => { setPassword(e.target.value); setError(""); }} placeholder="••••••••" style={inp} onKeyDown={e => e.key === "Enter" && handleLogin()} />
-            </Field>
-            {error && (
-              <div style={{ background: "#2a1010", border: "1px solid #5a2020", color: "#cb7e7e", padding: "10px 14px", borderRadius: 4, fontSize: 13 }}>
-                {error}
-              </div>
-            )}
-            <button onClick={handleLogin} disabled={cargando} style={{ ...btn("gold"), padding: "12px", fontSize: 15, letterSpacing: 1, opacity: cargando ? 0.7 : 1 }}>
-              {cargando ? "Ingresando..." : "Ingresar"}
-            </button>
+            <Field label="Usuario"><input value={usuario} onChange={e => { setUsuario(e.target.value); setError(""); }} placeholder="Tu usuario" style={inp} onKeyDown={e => e.key === "Enter" && handleLogin()} /></Field>
+            <Field label="Contraseña"><input type="password" value={password} onChange={e => { setPassword(e.target.value); setError(""); }} placeholder="••••••••" style={inp} onKeyDown={e => e.key === "Enter" && handleLogin()} /></Field>
+            {error && <div style={{ background: "#2a1010", border: "1px solid #5a2020", color: "#cb7e7e", padding: "10px 14px", borderRadius: 4, fontSize: 13 }}>{error}</div>}
+            <button onClick={handleLogin} disabled={cargando} style={{ ...btn("gold"), padding: "12px", fontSize: 15, letterSpacing: 1, opacity: cargando ? 0.7 : 1 }}>{cargando ? "Ingresando..." : "Ingresar"}</button>
           </div>
         </div>
       </div>
@@ -313,7 +258,6 @@ function Login({ onLogin }) {
   );
 }
 
-// Pantalla de selección de sector para garzones
 function SeleccionSector({ sesion, onSectorElegido }) {
   return (
     <div style={{ minHeight: "100vh", background: "#0a0806", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Georgia', serif", padding: 16 }}>
@@ -323,21 +267,12 @@ function SeleccionSector({ sesion, onSectorElegido }) {
         <p style={{ color: "#7a6a50", fontSize: 14, marginBottom: 36 }}>¿Cuál es tu sector esta noche?</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           {SECTORES.map(sector => (
-            <button
-              key={sector}
-              onClick={() => onSectorElegido(sector)}
-              style={{
-                background: "#15120a", border: "1px solid #3a2e1a",
-                borderRadius: 8, padding: "22px 16px", cursor: "pointer",
-                fontFamily: "'Georgia', serif", color: "#f5e6c8", fontSize: 15,
-                transition: "all 0.15s",
-              }}
+            <button key={sector} onClick={() => onSectorElegido(sector)}
+              style={{ background: "#15120a", border: "1px solid #3a2e1a", borderRadius: 8, padding: "22px 16px", cursor: "pointer", fontFamily: "'Georgia', serif", color: "#f5e6c8", fontSize: 15, transition: "all 0.15s" }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = "#b8914a"; e.currentTarget.style.color = "#fbbf24"; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = "#3a2e1a"; e.currentTarget.style.color = "#f5e6c8"; }}
             >
-              <div style={{ fontSize: 28, marginBottom: 8 }}>
-                {sector === "Sector Isla" ? "🏝️" : sector === "Sector Pantallas" ? "📺" : sector === "Sector Escape" ? "🚪" : "🎧"}
-              </div>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>{sector === "Sector Isla" ? "🏝️" : sector === "Sector Pantallas" ? "📺" : sector === "Sector Escape" ? "🚪" : "🎧"}</div>
               {sector}
             </button>
           ))}
@@ -347,7 +282,7 @@ function SeleccionSector({ sesion, onSectorElegido }) {
   );
 }
 
-function AdminPanel({ sesion }) {
+function AdminPanel() {
   const [tab, setTab] = useState("garzones");
   const [usuarios, setUsuarios] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -356,123 +291,92 @@ function AdminPanel({ sesion }) {
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
   const [confirmarEliminar, setConfirmarEliminar] = useState(null);
-  // Cambio de credenciales admin
   const [adminForm, setAdminForm] = useState({ usuario: "", password: "", confirmar: "" });
   const [adminError, setAdminError] = useState("");
+  const [listaNegra, setListaNegra] = useState([]);
+  const [lnForm, setLnForm] = useState({ nombre: "", apellido: "", rut: "", motivo: "" });
+  const [lnError, setLnError] = useState("");
+  const [confirmarEliminarLn, setConfirmarEliminarLn] = useState(null);
+  const [intentos, setIntentos] = useState([]);
+  const [cargandoIntentos, setCargandoIntentos] = useState(false);
 
   const flash = (t) => { setMsg(t); setTimeout(() => setMsg(""), 3000); };
 
   useEffect(() => { cargarUsuarios(); }, []);
+  useEffect(() => { if (tab === "listanegra") cargarListaNegra(); }, [tab]);
+  useEffect(() => { if (tab === "intentos") cargarIntentos(); }, [tab]);
 
-  const cargarUsuarios = async () => {
-    setCargando(true);
-    const data = await db.get("usuarios", "select=*&order=id.asc");
-    setUsuarios(data);
-    setCargando(false);
-  };
+  const cargarUsuarios = async () => { setCargando(true); const data = await db.get("usuarios", "select=*&order=id.asc"); setUsuarios(data); setCargando(false); };
+  const cargarListaNegra = async () => { const data = await db.get("lista_negra", "select=*&order=id.desc"); setListaNegra(data); };
+  const cargarIntentos = async () => { setCargandoIntentos(true); const data = await db.get("intentos_bloqueados", "select=*&order=fecha_intento.desc"); setIntentos(data); setCargandoIntentos(false); };
+  const marcarVisto = async (id) => { await db.patch("intentos_bloqueados", id, { visto: true }); cargarIntentos(); };
 
   const guardar = async () => {
     if (!form.nombre.trim()) return setError("El nombre es obligatorio.");
     if (!form.usuario.trim()) return setError("El usuario es obligatorio.");
     if (!form.password.trim()) return setError("La contraseña es obligatoria.");
-    if (editando) {
-      await db.patch("usuarios", editando, { nombre: form.nombre.trim(), usuario: form.usuario.trim(), password: form.password.trim() });
-      flash("Usuario actualizado.");
-    } else {
-      await db.post("usuarios", { nombre: form.nombre.trim(), usuario: form.usuario.trim(), password: form.password.trim(), activo: true });
-      flash("Garzón creado.");
-    }
-    setForm({ nombre: "", usuario: "", password: "" });
-    setEditando(null);
-    setError("");
-    cargarUsuarios();
+    if (editando) { await db.patch("usuarios", editando, { nombre: form.nombre.trim(), usuario: form.usuario.trim(), password: form.password.trim() }); flash("Usuario actualizado."); }
+    else { await db.post("usuarios", { nombre: form.nombre.trim(), usuario: form.usuario.trim(), password: form.password.trim(), activo: true }); flash("Garzón creado."); }
+    setForm({ nombre: "", usuario: "", password: "" }); setEditando(null); setError(""); cargarUsuarios();
   };
 
-  const toggleActivo = async (u) => {
-    await db.patch("usuarios", u.id, { activo: !u.activo });
-    cargarUsuarios();
-  };
-
-  const eliminar = async (u) => {
-    await db.delete("usuarios", u.id);
-    setConfirmarEliminar(null);
-    flash("Usuario eliminado.");
-    cargarUsuarios();
-  };
+  const toggleActivo = async (u) => { await db.patch("usuarios", u.id, { activo: !u.activo }); cargarUsuarios(); };
+  const eliminar = async (u) => { await db.delete("usuarios", u.id); setConfirmarEliminar(null); flash("Usuario eliminado."); cargarUsuarios(); };
 
   const guardarAdmin = async () => {
     if (!adminForm.usuario.trim()) return setAdminError("El usuario es obligatorio.");
     if (!adminForm.password.trim()) return setAdminError("La contraseña es obligatoria.");
     if (adminForm.password !== adminForm.confirmar) return setAdminError("Las contraseñas no coinciden.");
     try {
-      // Verificar si ya existe registro en admin_config
       const existing = await db.get("admin_config", "select=*");
-      if (existing && existing.length > 0) {
-        await db.patch("admin_config", existing[0].id, { usuario: adminForm.usuario.trim(), password: adminForm.password.trim() });
-      } else {
-        await db.post("admin_config", { usuario: adminForm.usuario.trim(), password: adminForm.password.trim() });
-      }
-      setAdminForm({ usuario: "", password: "", confirmar: "" });
-      setAdminError("");
-      flash("Credenciales de administrador actualizadas. Recuerda el nuevo usuario y contraseña.");
-    } catch {
-      setAdminError("Error al guardar. Verifica que la tabla admin_config exista en Supabase.");
-    }
+      if (existing && existing.length > 0) await db.patch("admin_config", existing[0].id, { usuario: adminForm.usuario.trim(), password: adminForm.password.trim() });
+      else await db.post("admin_config", { usuario: adminForm.usuario.trim(), password: adminForm.password.trim() });
+      setAdminForm({ usuario: "", password: "", confirmar: "" }); setAdminError(""); flash("Credenciales actualizadas.");
+    } catch { setAdminError("Error al guardar. Verifica que la tabla admin_config exista en Supabase."); }
   };
 
-  const tabStyle = (t) => ({
-    background: "none", border: "none",
-    borderBottom: tab === t ? "2px solid #b8914a" : "2px solid transparent",
-    color: tab === t ? "#f5e6c8" : "#7a6a50",
-    padding: "8px 16px", cursor: "pointer",
-    fontFamily: "'Georgia', serif", fontSize: 13, marginBottom: 20,
-  });
+  const agregarListaNegra = async () => {
+    if (!lnForm.nombre.trim()) return setLnError("El nombre es obligatorio.");
+    if (!lnForm.apellido.trim()) return setLnError("El apellido es obligatorio.");
+    if (!lnForm.rut.trim()) return setLnError("El RUT es obligatorio.");
+    await db.post("lista_negra", { nombre: lnForm.nombre.trim(), apellido: lnForm.apellido.trim(), rut: lnForm.rut.trim(), motivo: lnForm.motivo.trim() });
+    setLnForm({ nombre: "", apellido: "", rut: "", motivo: "" }); setLnError(""); flash("Persona agregada a lista negra."); cargarListaNegra();
+  };
+
+  const eliminarListaNegra = async (ln) => { await db.delete("lista_negra", ln.id); setConfirmarEliminarLn(null); flash("Persona removida de lista negra."); cargarListaNegra(); };
+
+  const tabStyle = (t) => ({ background: "none", border: "none", borderBottom: tab === t ? "2px solid #b8914a" : "2px solid transparent", color: tab === t ? "#f5e6c8" : "#7a6a50", padding: "8px 14px", cursor: "pointer", fontFamily: "'Georgia', serif", fontSize: 13 });
+  const intentosNuevos = intentos.filter(i => !i.visto).length;
 
   return (
     <div>
-      {msg && (
-        <div style={{ position: "fixed", top: 20, right: 20, zIndex: 999, background: "#2a4a2a", color: "#7ecb7e", border: "1px solid #4a8a4a", padding: "12px 20px", borderRadius: 4, fontSize: 14 }}>
-          {msg}
-        </div>
-      )}
+      {msg && <div style={{ position: "fixed", top: 20, right: 20, zIndex: 999, background: "#2a4a2a", color: "#7ecb7e", border: "1px solid #4a8a4a", padding: "12px 20px", borderRadius: 4, fontSize: 14 }}>{msg}</div>}
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 10, letterSpacing: 4, color: "#b8914a", textTransform: "uppercase", marginBottom: 4 }}>Panel de Administrador</div>
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: "normal", color: "#f5e6c8" }}>Configuración</h2>
       </div>
-      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #2a2010", marginBottom: 24 }}>
-        <button style={tabStyle("garzones")} onClick={() => setTab("garzones")}>Gestión de Garzones</button>
+      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #2a2010", marginBottom: 24, flexWrap: "wrap" }}>
+        <button style={tabStyle("garzones")} onClick={() => setTab("garzones")}>Garzones</button>
+        <button style={tabStyle("listanegra")} onClick={() => setTab("listanegra")}>Lista negra</button>
+        <button style={{ ...tabStyle("intentos") }} onClick={() => setTab("intentos")}>
+          Intentos bloqueados{intentosNuevos > 0 && <span style={{ marginLeft: 6, background: "#7a2020", color: "#fca5a5", fontSize: 10, padding: "1px 6px", borderRadius: 10, fontWeight: "bold" }}>{intentosNuevos}</span>}
+        </button>
         <button style={tabStyle("micuenta")} onClick={() => setTab("micuenta")}>Mi cuenta</button>
       </div>
 
       {tab === "garzones" && (
         <>
           <div style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 8, padding: 24, marginBottom: 28 }}>
-            <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 16 }}>
-              {editando ? "Editar Garzón" : "Nuevo Garzón"}
-            </div>
+            <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 16 }}>{editando ? "Editar Garzón" : "Nuevo Garzón"}</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 16, marginBottom: 16 }}>
-              <Field label="Nombre completo">
-                <input value={form.nombre} onChange={e => { setForm(p => ({ ...p, nombre: e.target.value })); setError(""); }} placeholder="Ej: Sofía Reyes" style={inp} />
-              </Field>
-              <Field label="Usuario">
-                <input value={form.usuario} onChange={e => { setForm(p => ({ ...p, usuario: e.target.value })); setError(""); }} placeholder="Ej: garzon11" style={inp} />
-              </Field>
-              <Field label="Contraseña">
-                <input value={form.password} onChange={e => { setForm(p => ({ ...p, password: e.target.value })); setError(""); }} placeholder="Contraseña" style={inp} />
-              </Field>
+              <Field label="Nombre completo"><input value={form.nombre} onChange={e => { setForm(p => ({ ...p, nombre: e.target.value })); setError(""); }} placeholder="Ej: Sofía Reyes" style={inp} /></Field>
+              <Field label="Usuario"><input value={form.usuario} onChange={e => { setForm(p => ({ ...p, usuario: e.target.value })); setError(""); }} placeholder="Ej: garzon11" style={inp} /></Field>
+              <Field label="Contraseña"><input value={form.password} onChange={e => { setForm(p => ({ ...p, password: e.target.value })); setError(""); }} placeholder="Contraseña" style={inp} /></Field>
             </div>
-            {error && (
-              <div style={{ background: "#2a1010", border: "1px solid #5a2020", color: "#cb7e7e", padding: "10px 14px", borderRadius: 4, fontSize: 13, marginBottom: 12 }}>
-                {error}
-              </div>
-            )}
+            {error && <div style={{ background: "#2a1010", border: "1px solid #5a2020", color: "#cb7e7e", padding: "10px 14px", borderRadius: 4, fontSize: 13, marginBottom: 12 }}>{error}</div>}
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={guardar} style={btn("gold")}>{editando ? "Guardar cambios" : "+ Agregar garzón"}</button>
-              {editando && (
-                <button onClick={() => { setEditando(null); setForm({ nombre: "", usuario: "", password: "" }); setError(""); }} style={btn("ghost")}>
-                  Cancelar
-                </button>
-              )}
+              {editando && <button onClick={() => { setEditando(null); setForm({ nombre: "", usuario: "", password: "" }); setError(""); }} style={btn("ghost")}>Cancelar</button>}
             </div>
           </div>
           {cargando ? <Spinner /> : (
@@ -481,9 +385,7 @@ function AdminPanel({ sesion }) {
                 <div key={u.id} style={{ background: "#15120a", border: "1px solid #2a2010", borderLeft: `3px solid ${u.activo ? "#b8914a" : "#3a2a1a"}`, borderRadius: 6, padding: "13px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, opacity: u.activo ? 1 : 0.55 }}>
                   <div>
                     <div style={{ fontSize: 15, color: "#f5e6c8", marginBottom: 2 }}>{u.nombre}</div>
-                    <div style={{ fontSize: 12, color: "#7a6a50" }}>
-                      @{u.usuario} · <span style={{ color: u.activo ? "#7ecb7e" : "#9a5050" }}>{u.activo ? "Activo" : "Inactivo"}</span>
-                    </div>
+                    <div style={{ fontSize: 12, color: "#7a6a50" }}>@{u.usuario} · <span style={{ color: u.activo ? "#7ecb7e" : "#9a5050" }}>{u.activo ? "Activo" : "Inactivo"}</span></div>
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button onClick={() => { setEditando(u.id); setForm({ nombre: u.nombre, usuario: u.usuario, password: u.password }); setError(""); }} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px" }}>Editar</button>
@@ -497,31 +399,74 @@ function AdminPanel({ sesion }) {
         </>
       )}
 
+      {tab === "listanegra" && (
+        <>
+          <div style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 8, padding: 24, marginBottom: 24 }}>
+            <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 16 }}>Agregar persona</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14, marginBottom: 14 }}>
+              <Field label="Nombre"><input value={lnForm.nombre} onChange={e => { setLnForm(p => ({ ...p, nombre: e.target.value })); setLnError(""); }} placeholder="Nombre" style={inp} /></Field>
+              <Field label="Apellido"><input value={lnForm.apellido} onChange={e => { setLnForm(p => ({ ...p, apellido: e.target.value })); setLnError(""); }} placeholder="Apellido" style={inp} /></Field>
+              <Field label="RUT"><input value={lnForm.rut} onChange={e => { setLnForm(p => ({ ...p, rut: e.target.value })); setLnError(""); }} placeholder="12.345.678-9" style={inp} /></Field>
+              <Field label="Motivo (opcional)"><input value={lnForm.motivo} onChange={e => setLnForm(p => ({ ...p, motivo: e.target.value }))} placeholder="Ej: Conducta agresiva" style={inp} /></Field>
+            </div>
+            {lnError && <div style={{ background: "#2a1010", border: "1px solid #5a2020", color: "#cb7e7e", padding: "10px 14px", borderRadius: 4, fontSize: 13, marginBottom: 12 }}>{lnError}</div>}
+            <button onClick={agregarListaNegra} style={btn("gold")}>+ Agregar a lista negra</button>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {listaNegra.length === 0 && <div style={{ textAlign: "center", padding: "40px 20px", color: "#4a3a22", border: "1px dashed #2a1e0a", borderRadius: 6 }}>Lista negra vacía</div>}
+            {listaNegra.map(ln => (
+              <div key={ln.id} style={{ background: "#1a0a0a", border: "1px solid #4a2020", borderLeft: "3px solid #7a2020", borderRadius: 6, padding: "13px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 15, color: "#f5e6c8", marginBottom: 2 }}>{ln.nombre} {ln.apellido}</div>
+                  <div style={{ fontSize: 12, color: "#7a6a50" }}>🪪 {ln.rut}{ln.motivo ? ` · ${ln.motivo}` : ""}</div>
+                </div>
+                <button onClick={() => setConfirmarEliminarLn(ln)} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px", color: "#9a5050", borderColor: "#4a2020" }}>Remover</button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {tab === "intentos" && (
+        <div>
+          {cargandoIntentos ? <Spinner /> : intentos.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "60px 20px", color: "#4a3a22", border: "1px dashed #2a1e0a", borderRadius: 6 }}>
+              <div style={{ fontSize: 38, marginBottom: 10 }}>🛡️</div>
+              <div>Sin intentos bloqueados registrados</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {intentos.map(i => (
+                <div key={i.id} style={{ background: i.visto ? "#15120a" : "#1a0808", border: `1px solid ${i.visto ? "#2a2010" : "#5a1a1a"}`, borderLeft: `3px solid ${i.visto ? "#3a2a1a" : "#cb3030"}`, borderRadius: 6, padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, opacity: i.visto ? 0.6 : 1 }}>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                      {!i.visto && <span style={{ background: "#7a2020", color: "#fca5a5", fontSize: 10, padding: "2px 8px", borderRadius: 10 }}>NUEVO</span>}
+                      <span style={{ fontSize: 15, color: "#f5e6c8" }}>{i.cliente_nombre} {i.cliente_apellido}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#7a6a50" }}>
+                      🪪 {i.cliente_rut} &nbsp;·&nbsp; 👤 Garzón: {i.garzon_nombre} &nbsp;·&nbsp; Mesa {i.mesa_id} &nbsp;·&nbsp; {new Date(i.fecha_intento).toLocaleString("es-CL")}
+                    </div>
+                    {i.fecha_reserva && <div style={{ fontSize: 12, color: "#9a5050", marginTop: 2 }}>📅 Intentó reservar para: {i.fecha_reserva}</div>}
+                  </div>
+                  {!i.visto && <button onClick={() => marcarVisto(i.id)} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px" }}>Marcar visto</button>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {tab === "micuenta" && (
         <div style={{ maxWidth: 420 }}>
           <div style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 8, padding: 24 }}>
-            <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 16 }}>
-              Cambiar credenciales de administrador
-            </div>
+            <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 16 }}>Cambiar credenciales de administrador</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <Field label="Nuevo usuario">
-                <input value={adminForm.usuario} onChange={e => { setAdminForm(p => ({ ...p, usuario: e.target.value })); setAdminError(""); }} placeholder="Nuevo usuario" style={inp} />
-              </Field>
-              <Field label="Nueva contraseña">
-                <input type="password" value={adminForm.password} onChange={e => { setAdminForm(p => ({ ...p, password: e.target.value })); setAdminError(""); }} placeholder="Nueva contraseña" style={inp} />
-              </Field>
-              <Field label="Confirmar contraseña">
-                <input type="password" value={adminForm.confirmar} onChange={e => { setAdminForm(p => ({ ...p, confirmar: e.target.value })); setAdminError(""); }} placeholder="Repetir contraseña" style={inp} />
-              </Field>
-              {adminError && (
-                <div style={{ background: "#2a1010", border: "1px solid #5a2020", color: "#cb7e7e", padding: "10px 14px", borderRadius: 4, fontSize: 13 }}>
-                  {adminError}
-                </div>
-              )}
+              <Field label="Nuevo usuario"><input value={adminForm.usuario} onChange={e => { setAdminForm(p => ({ ...p, usuario: e.target.value })); setAdminError(""); }} placeholder="Nuevo usuario" style={inp} /></Field>
+              <Field label="Nueva contraseña"><input type="password" value={adminForm.password} onChange={e => { setAdminForm(p => ({ ...p, password: e.target.value })); setAdminError(""); }} placeholder="Nueva contraseña" style={inp} /></Field>
+              <Field label="Confirmar contraseña"><input type="password" value={adminForm.confirmar} onChange={e => { setAdminForm(p => ({ ...p, confirmar: e.target.value })); setAdminError(""); }} placeholder="Repetir contraseña" style={inp} /></Field>
+              {adminError && <div style={{ background: "#2a1010", border: "1px solid #5a2020", color: "#cb7e7e", padding: "10px 14px", borderRadius: 4, fontSize: 13 }}>{adminError}</div>}
               <button onClick={guardarAdmin} style={btn("gold")}>Guardar cambios</button>
-              <div style={{ fontSize: 12, color: "#5a4a30", marginTop: 4 }}>
-                ⚠️ Asegúrate de recordar las nuevas credenciales antes de guardar.
-              </div>
+              <div style={{ fontSize: 12, color: "#5a4a30" }}>⚠️ Asegúrate de recordar las nuevas credenciales antes de guardar.</div>
             </div>
           </div>
         </div>
@@ -532,12 +477,24 @@ function AdminPanel({ sesion }) {
           <div style={{ background: "#15120a", border: "1px solid #3a2e1a", borderRadius: 8, padding: 32, maxWidth: 380, width: "100%", textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
             <div style={{ fontSize: 17, color: "#f5e6c8", marginBottom: 8 }}>Eliminar usuario</div>
-            <div style={{ fontSize: 14, color: "#7a6a50", marginBottom: 24 }}>
-              ¿Eliminar a <strong style={{ color: "#e8dcc8" }}>{confirmarEliminar.nombre}</strong> permanentemente?
-            </div>
+            <div style={{ fontSize: 14, color: "#7a6a50", marginBottom: 24 }}>¿Eliminar a <strong style={{ color: "#e8dcc8" }}>{confirmarEliminar.nombre}</strong> permanentemente?</div>
             <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
               <button onClick={() => eliminar(confirmarEliminar)} style={btn("danger")}>Sí, eliminar</button>
               <button onClick={() => setConfirmarEliminar(null)} style={btn("ghost")}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmarEliminarLn && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
+          <div style={{ background: "#15120a", border: "1px solid #3a2e1a", borderRadius: 8, padding: 32, maxWidth: 380, width: "100%", textAlign: "center" }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
+            <div style={{ fontSize: 17, color: "#f5e6c8", marginBottom: 8 }}>Remover de lista negra</div>
+            <div style={{ fontSize: 14, color: "#7a6a50", marginBottom: 24 }}>¿Remover a <strong style={{ color: "#e8dcc8" }}>{confirmarEliminarLn.nombre} {confirmarEliminarLn.apellido}</strong> de la lista negra?</div>
+            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+              <button onClick={() => eliminarListaNegra(confirmarEliminarLn)} style={btn("danger")}>Sí, remover</button>
+              <button onClick={() => setConfirmarEliminarLn(null)} style={btn("ghost")}>Cancelar</button>
             </div>
           </div>
         </div>
@@ -552,43 +509,33 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   const [cargando, setCargando] = useState(true);
   const [fechaSeleccionada, setFechaSeleccionada] = useState(today());
   const [reservaAEliminar, setReservaAEliminar] = useState(null);
+  const [reservaExpandida, setReservaExpandida] = useState(null);
   const [textoCliente, setTextoCliente] = useState("");
-  const [form, setForm] = useState({
-    nombre: "", apellido: "", rut: "",
-    fecha: today(), personas: 2, mesa_id: "", nota: "",
-  });
+  const [clientesParsed, setClientesParsed] = useState([]);
+  const [alertaListaNegra, setAlertaListaNegra] = useState([]);
+  const [listaNegra, setListaNegra] = useState([]);
+  const [form, setForm] = useState({ fecha: today(), personas: 2, mesa_id: "", nota: "" });
   const [error, setError] = useState("");
   const [exitoMsg, setExitoMsg] = useState("");
 
   const flash = (t) => { setExitoMsg(t); setTimeout(() => setExitoMsg(""), 3000); };
 
-  useEffect(() => { cargarReservas(); }, [fechaSeleccionada]);
+  useEffect(() => { cargarReservas(); cargarListaNegra(); }, [fechaSeleccionada]);
 
-  const cargarReservas = async () => {
-    setCargando(true);
-    const data = await db.get("reservas", `fecha=eq.${fechaSeleccionada}&select=*&order=nombre.asc`);
-    setReservas(data);
-    setCargando(false);
-  };
+  const cargarReservas = async () => { setCargando(true); const data = await db.get("reservas", `fecha=eq.${fechaSeleccionada}&select=*&order=nombre.asc`); setReservas(data); setCargando(false); };
+  const cargarListaNegra = async () => { const data = await db.get("lista_negra", "select=*"); setListaNegra(data); };
 
-  // Filtrar reservas por sector si es garzón
-  const reservasFiltradas = sesion.rol === "admin"
-    ? reservas
-    : reservas.filter(r => {
-        const mesa = MESAS.find(m => m.id === r.mesa_id);
-        return mesa?.zona === sectorSesion;
-      });
-
-  const mesasDisponibles = () => {
-    const ocupadas = reservas.map(r => r.mesa_id);
-    return MESAS.filter(m => !ocupadas.includes(m.id));
-  };
+  const reservasFiltradas = sesion.rol === "admin" ? reservas : reservas.filter(r => { const mesa = MESAS.find(m => m.id === r.mesa_id); return mesa?.zona === sectorSesion; });
+  const mesasDisponibles = () => { const ocupadas = reservas.map(r => r.mesa_id); return MESAS.filter(m => !ocupadas.includes(m.id)); };
 
   const handlePasteCliente = (texto) => {
     setTextoCliente(texto);
-    if (!texto.trim()) return;
-    const { nombre, apellido, rut } = parsearCliente(texto);
-    setForm(prev => ({ ...prev, nombre, apellido, rut }));
+    setAlertaListaNegra([]);
+    if (!texto.trim()) { setClientesParsed([]); return; }
+    const clientes = parsearTodosClientes(texto);
+    setClientesParsed(clientes);
+    const bloqueados = clientes.map(c => ({ cliente: c, match: estaEnListaNegra(c, listaNegra) })).filter(x => x.match);
+    setAlertaListaNegra(bloqueados);
     setError("");
   };
 
@@ -599,39 +546,41 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   };
 
   const handleSubmit = async () => {
-    if (!form.nombre.trim()) return setError("El nombre es obligatorio.");
-    if (!form.apellido.trim()) return setError("El apellido es obligatorio.");
-    if (!form.rut.trim()) return setError("El RUT es obligatorio.");
+    if (clientesParsed.length === 0) return setError("Pega los datos del cliente en el cuadro de texto.");
+    const titular = clientesParsed[0];
+    if (!titular.nombre) return setError("No se pudo identificar el nombre del titular.");
+    if (!titular.rut) return setError("No se pudo identificar el RUT del titular.");
     if (!form.mesa_id) return setError("Selecciona una mesa en el mapa.");
+    if (alertaListaNegra.length > 0) {
+      // Registrar intento bloqueado
+      for (const x of alertaListaNegra) {
+        await db.post("intentos_bloqueados", {
+          cliente_nombre: x.cliente.nombre, cliente_apellido: x.cliente.apellido,
+          cliente_rut: x.cliente.rut, garzon_nombre: sesion.nombre,
+          fecha_reserva: form.fecha, mesa_id: parseInt(form.mesa_id), visto: false,
+        });
+      }
+      return setError(`🚫 Reserva bloqueada: ${alertaListaNegra.map(x => `${x.cliente.nombre} ${x.cliente.apellido}`).join(", ")} está en lista negra. Se notificó al administrador.`);
+    }
     const mesa = MESAS.find(m => m.id === parseInt(form.mesa_id));
     if (parseInt(form.personas) > mesa.capacidad) return setError(`Mesa ${mesa.id}: máximo ${mesa.capacidad} personas.`);
-    // Verificar que la mesa no esté ya reservada esa noche
     const yaReservada = reservas.some(r => r.mesa_id === parseInt(form.mesa_id) && r.fecha === form.fecha);
     if (yaReservada) return setError(`La mesa ${form.mesa_id} ya tiene una reserva para esa noche.`);
 
     await db.post("reservas", {
-      nombre: form.nombre.trim(),
-      apellido: form.apellido.trim(),
-      rut: form.rut.trim(),
-      fecha: form.fecha,
-      hora: "23:30",
-      personas: parseInt(form.personas),
-      mesa_id: parseInt(form.mesa_id),
-      nota: form.nota.trim(),
+      nombre: titular.nombre, apellido: titular.apellido, rut: titular.rut,
+      fecha: form.fecha, hora: "23:30", personas: parseInt(form.personas),
+      mesa_id: parseInt(form.mesa_id), nota: form.nota.trim(),
+      participantes: clientesParsed.slice(1),
     });
     setFechaSeleccionada(form.fecha);
     setVista("dia");
-    setTextoCliente("");
-    setForm({ nombre: "", apellido: "", rut: "", fecha: today(), personas: 2, mesa_id: "", nota: "" });
+    setTextoCliente(""); setClientesParsed([]); setAlertaListaNegra([]);
+    setForm({ fecha: today(), personas: 2, mesa_id: "", nota: "" });
     flash("¡Reserva creada correctamente!");
   };
 
-  const cancelarReserva = async () => {
-    await db.delete("reservas", reservaAEliminar.id);
-    setReservaAEliminar(null);
-    flash("Reserva cancelada.");
-    cargarReservas();
-  };
+  const cancelarReserva = async () => { await db.delete("reservas", reservaAEliminar.id); setReservaAEliminar(null); flash("Reserva cancelada."); cargarReservas(); };
 
   const tabs = [
     { key: "dia", label: "Reservas del día" },
@@ -651,9 +600,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 13, color: "#f5e6c8" }}>{sesion.nombre}</div>
-                <div style={{ fontSize: 10, color: "#7a6a50", textTransform: "uppercase", letterSpacing: 1 }}>
-                  {sesion.rol === "admin" ? "Administrador" : sectorSesion}
-                </div>
+                <div style={{ fontSize: 10, color: "#7a6a50", textTransform: "uppercase", letterSpacing: 1 }}>{sesion.rol === "admin" ? "Administrador" : sectorSesion}</div>
               </div>
               <button onClick={() => { setVista("formulario"); setError(""); }} style={{ ...btn("gold"), padding: "8px 16px", fontSize: 13 }}>+ Nueva Reserva</button>
               <button onClick={onLogout} style={{ ...btn("ghost"), fontSize: 12, padding: "7px 14px", color: "#7a6a50" }}>Salir</button>
@@ -661,17 +608,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
           </div>
           <div style={{ display: "flex", gap: 0, marginTop: 18 }}>
             {tabs.map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setVista(tab.key)}
-                style={{
-                  background: "none", border: "none",
-                  borderBottom: vista === tab.key ? "2px solid #b8914a" : "2px solid transparent",
-                  color: vista === tab.key ? "#f5e6c8" : "#7a6a50",
-                  padding: "10px 20px", cursor: "pointer",
-                  fontFamily: "'Georgia', serif", fontSize: 14,
-                }}
-              >
+              <button key={tab.key} onClick={() => setVista(tab.key)} style={{ background: "none", border: "none", borderBottom: vista === tab.key ? "2px solid #b8914a" : "2px solid transparent", color: vista === tab.key ? "#f5e6c8" : "#7a6a50", padding: "10px 20px", cursor: "pointer", fontFamily: "'Georgia', serif", fontSize: 14 }}>
                 {tab.label}
               </button>
             ))}
@@ -679,11 +616,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
         </div>
       </div>
 
-      {exitoMsg && (
-        <div style={{ position: "fixed", top: 20, right: 20, zIndex: 999, background: "#2a4a2a", color: "#7ecb7e", border: "1px solid #4a8a4a", padding: "12px 20px", borderRadius: 4, fontSize: 14 }}>
-          {exitoMsg}
-        </div>
-      )}
+      {exitoMsg && <div style={{ position: "fixed", top: 20, right: 20, zIndex: 999, background: "#2a4a2a", color: "#7ecb7e", border: "1px solid #4a8a4a", padding: "12px 20px", borderRadius: 4, fontSize: 14 }}>{exitoMsg}</div>}
 
       <div style={{ maxWidth: 1000, margin: "0 auto", padding: "28px 16px" }}>
 
@@ -693,8 +626,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
               <label style={{ color: "#7a6a50", fontSize: 12, letterSpacing: 1, textTransform: "uppercase" }}>Fecha:</label>
               <input type="date" value={fechaSeleccionada} onChange={e => setFechaSeleccionada(e.target.value)} style={{ ...inp, width: "auto" }} />
               <span style={{ background: "#2a1e0a", border: "1px solid #3a2e1a", color: "#b8914a", padding: "5px 14px", borderRadius: 20, fontSize: 13 }}>
-                {reservasFiltradas.length} reservas
-                {sectorSesion && sesion.rol !== "admin" ? ` · ${sectorSesion}` : ""}
+                {reservasFiltradas.length} reservas{sectorSesion && sesion.rol !== "admin" ? ` · ${sectorSesion}` : ""}
               </span>
               <button onClick={cargarReservas} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px" }}>↻ Actualizar</button>
               {sesion.rol !== "admin" && (
@@ -710,22 +642,57 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {reservasFiltradas.map(r => {
                   const mesa = MESAS.find(m => m.id === r.mesa_id);
+                  const expandida = reservaExpandida === r.id;
+                  const participantes = Array.isArray(r.participantes) ? r.participantes : [];
                   return (
-                    <div key={r.id} style={{ background: "#15120a", border: "1px solid #2a2010", borderLeft: "3px solid #b8914a", borderRadius: 6, padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-                      <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-                        <div style={{ background: "#1e1608", border: "1px solid #3a2e1a", borderRadius: 4, padding: "6px 14px", textAlign: "center", minWidth: 58 }}>
-                          <div style={{ fontSize: 16, color: "#f5e6c8", fontWeight: "bold" }}>23:30</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 15, color: "#f5e6c8", marginBottom: 3 }}>{r.nombre} {r.apellido}</div>
-                          <div style={{ fontSize: 12, color: "#7a6a50" }}>
-                            🪪 {r.rut} &nbsp;·&nbsp; 👥 {r.personas} pers. &nbsp;·&nbsp;
-                            <span style={{ color: "#b8914a" }}>Mesa {r.mesa_id} ({mesa?.zona})</span>
+                    <div key={r.id} style={{ background: "#15120a", border: "1px solid #2a2010", borderLeft: "3px solid #b8914a", borderRadius: 6, overflow: "hidden" }}>
+                      <div onClick={() => setReservaExpandida(expandida ? null : r.id)} style={{ padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, cursor: "pointer" }}>
+                        <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+                          <div style={{ background: "#1e1608", border: "1px solid #3a2e1a", borderRadius: 4, padding: "6px 14px", textAlign: "center", minWidth: 58 }}>
+                            <div style={{ fontSize: 16, color: "#f5e6c8", fontWeight: "bold" }}>23:30</div>
                           </div>
-                          {r.nota && <div style={{ fontSize: 12, color: "#b8914a", marginTop: 3 }}>📝 {r.nota}</div>}
+                          <div>
+                            <div style={{ fontSize: 15, color: "#f5e6c8", marginBottom: 3 }}>
+                              {r.nombre} {r.apellido}
+                              {participantes.length > 0 && (
+                                <span style={{ marginLeft: 8, fontSize: 11, color: "#b8914a", background: "#2a1e0a", padding: "2px 8px", borderRadius: 10 }}>
+                                  +{participantes.length} participante{participantes.length > 1 ? "s" : ""}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 12, color: "#7a6a50" }}>
+                              🪪 {r.rut} &nbsp;·&nbsp; 👥 {r.personas} pers. &nbsp;·&nbsp;
+                              <span style={{ color: "#b8914a" }}>Mesa {r.mesa_id} ({mesa?.zona})</span>
+                            </div>
+                            {r.nota && <div style={{ fontSize: 12, color: "#b8914a", marginTop: 3 }}>📝 {r.nota}</div>}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <span style={{ fontSize: 13, color: "#5a4a30" }}>{expandida ? "▲" : "▼"}</span>
+                          <button onClick={e => { e.stopPropagation(); setReservaAEliminar(r); }} style={{ ...btn("ghost"), fontSize: 12, padding: "6px 14px", color: "#9a5050", borderColor: "#4a2020" }}>Cancelar reserva</button>
                         </div>
                       </div>
-                      <button onClick={() => setReservaAEliminar(r)} style={{ ...btn("ghost"), fontSize: 12, padding: "6px 14px", color: "#9a5050", borderColor: "#4a2020" }}>Cancelar reserva</button>
+
+                      {expandida && (
+                        <div style={{ borderTop: "1px solid #2a2010", padding: "12px 18px", background: "#0f0c06" }}>
+                          <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 10 }}>Lista de participantes</div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px", background: "#1a1508", borderRadius: 4, border: "1px solid #2a2010" }}>
+                              <span style={{ fontSize: 10, background: "#b8914a", color: "#0f0e0c", padding: "2px 7px", borderRadius: 10, fontWeight: "bold" }}>TITULAR</span>
+                              <span style={{ fontSize: 14, color: "#f5e6c8" }}>{r.nombre} {r.apellido}</span>
+                              <span style={{ fontSize: 12, color: "#7a6a50", marginLeft: "auto" }}>🪪 {r.rut}</span>
+                            </div>
+                            {participantes.length === 0 && <div style={{ fontSize: 12, color: "#4a3a22", padding: "6px 12px" }}>Sin participantes adicionales</div>}
+                            {participantes.map((p, idx) => (
+                              <div key={idx} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px", background: "#1a1508", borderRadius: 4, border: "1px solid #2a2010" }}>
+                                <span style={{ fontSize: 12, color: "#5a4a30", minWidth: 20 }}>{idx + 2}.</span>
+                                <span style={{ fontSize: 14, color: "#e8dcc8" }}>{p.nombre} {p.apellido}</span>
+                                <span style={{ fontSize: 12, color: "#7a6a50", marginLeft: "auto" }}>🪪 {p.rut}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -739,16 +706,9 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20, flexWrap: "wrap" }}>
               <label style={{ color: "#7a6a50", fontSize: 12, letterSpacing: 1, textTransform: "uppercase" }}>Fecha:</label>
               <input type="date" value={fechaSeleccionada} onChange={e => setFechaSeleccionada(e.target.value)} style={{ ...inp, width: "auto" }} />
-              <span style={{ background: "#2a1e0a", border: "1px solid #3a2e1a", color: "#7ecb7e", padding: "5px 14px", borderRadius: 20, fontSize: 13 }}>
-                {mesasDisponibles().length} disponibles
-              </span>
+              <span style={{ background: "#2a1e0a", border: "1px solid #3a2e1a", color: "#7ecb7e", padding: "5px 14px", borderRadius: 20, fontSize: 13 }}>{mesasDisponibles().length} disponibles</span>
             </div>
-            <FloorMap
-              reservas={reservas}
-              fecha={fechaSeleccionada}
-              mesaSeleccionada={null}
-              soloZona={sesion.rol !== "admin" ? sectorSesion : null}
-            />
+            <FloorMap reservas={reservas} fecha={fechaSeleccionada} mesaSeleccionada={null} soloZona={sesion.rol !== "admin" ? sectorSesion : null} />
           </div>
         )}
 
@@ -756,77 +716,68 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
           <div style={{ maxWidth: 620, margin: "0 auto" }}>
             <h2 style={{ fontSize: 20, fontWeight: "normal", color: "#f5e6c8", marginBottom: 24, letterSpacing: 1 }}>Nueva Reserva</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-
-              {/* Parser de texto */}
               <div style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 6, padding: 16 }}>
-                <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#b8914a", marginBottom: 8 }}>
-                  Pegar datos del cliente
-                </label>
+                <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#b8914a", marginBottom: 8 }}>Pegar lista de participantes</label>
                 <textarea
                   value={textoCliente}
                   onChange={e => handlePasteCliente(e.target.value)}
-                  placeholder={"Ej: Juan García 12.345.678-9"}
-                  rows={2}
+                  placeholder={"Juan García 12.345.678-9\nMaría López 9.876.543-2\nPedro Soto 11.222.333-4"}
+                  rows={4}
                   style={{ ...inp, resize: "vertical", fontFamily: "monospace", fontSize: 13 }}
                 />
-                <div style={{ fontSize: 11, color: "#5a4a30", marginTop: 6 }}>
-                  Pega el texto y los campos se rellenan automáticamente
-                </div>
+                <div style={{ fontSize: 11, color: "#5a4a30", marginTop: 6 }}>Primera línea = titular. Las siguientes son participantes adicionales.</div>
+
+                {clientesParsed.length > 0 && alertaListaNegra.length === 0 && (
+                  <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 4 }}>
+                    {clientesParsed.map((c, idx) => (
+                      <div key={idx} style={{ fontSize: 12, color: "#7ecb7e", display: "flex", gap: 8 }}>
+                        <span style={{ color: idx === 0 ? "#b8914a" : "#5a4a30" }}>{idx === 0 ? "★" : `${idx + 1}.`}</span>
+                        {c.nombre} {c.apellido} — {c.rut}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {alertaListaNegra.length > 0 && (
+                  <div style={{ marginTop: 12, background: "#2a0808", border: "1px solid #7a1a1a", borderRadius: 4, padding: "12px 14px" }}>
+                    <div style={{ fontSize: 13, color: "#f87171", fontWeight: "bold", marginBottom: 6 }}>🚫 Cliente(s) en lista negra — reserva bloqueada</div>
+                    {alertaListaNegra.map((x, idx) => (
+                      <div key={idx} style={{ fontSize: 12, color: "#fca5a5", marginBottom: 2 }}>
+                        • {x.cliente.nombre} {x.cliente.apellido} ({x.cliente.rut}){x.match.motivo ? <span style={{ color: "#9a5050" }}> — {x.match.motivo}</span> : ""}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                <Field label="Nombre">
-                  <input name="nombre" value={form.nombre} onChange={handleFormChange} placeholder="Ej: Juan" style={inp} />
-                </Field>
-                <Field label="Apellido">
-                  <input name="apellido" value={form.apellido} onChange={handleFormChange} placeholder="Ej: García" style={inp} />
-                </Field>
-              </div>
-              <Field label="RUT">
-                <input name="rut" value={form.rut} onChange={handleFormChange} placeholder="Ej: 12.345.678-9" style={inp} />
-              </Field>
-              <Field label="Fecha">
-                <input type="date" name="fecha" value={form.fecha} onChange={handleFormChange} style={inp} />
-              </Field>
+              <Field label="Fecha"><input type="date" name="fecha" value={form.fecha} onChange={handleFormChange} style={inp} /></Field>
               <Field label="Personas">
                 <select name="personas" value={form.personas} onChange={handleFormChange} style={inp}>
-                  {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
+                  {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
               </Field>
               <div>
-                <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 8 }}>
-                  Seleccionar Mesa — haz clic en el mapa
-                </label>
-                <FloorMap
-                  reservas={reservas}
-                  fecha={form.fecha}
-                  mesaSeleccionada={form.mesa_id ? parseInt(form.mesa_id) : null}
-                  onMesaClick={(id) => { setForm(p => ({ ...p, mesa_id: String(id) })); setError(""); }}
-                  soloZona={sesion.rol !== "admin" ? sectorSesion : null}
-                />
+                <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 8 }}>Seleccionar Mesa — haz clic en el mapa</label>
+                <FloorMap reservas={reservas} fecha={form.fecha} mesaSeleccionada={form.mesa_id ? parseInt(form.mesa_id) : null} onMesaClick={(id) => { setForm(p => ({ ...p, mesa_id: String(id) })); setError(""); }} soloZona={sesion.rol !== "admin" ? sectorSesion : null} />
                 {form.mesa_id && (
                   <div style={{ marginTop: 10, padding: "8px 14px", background: "#1a2010", border: "1px solid #3a5a1a", borderRadius: 4, fontSize: 13, color: "#7ecb7e" }}>
                     ✓ Mesa {form.mesa_id} seleccionada — {MESAS.find(m => m.id === parseInt(form.mesa_id))?.zona}
                   </div>
                 )}
               </div>
-              <Field label="Nota (opcional)">
-                <input name="nota" value={form.nota} onChange={handleFormChange} placeholder="Ej: Cumpleaños, alergias..." style={inp} />
-              </Field>
-              {error && (
-                <div style={{ background: "#2a1010", border: "1px solid #5a2020", color: "#cb7e7e", padding: "10px 14px", borderRadius: 4, fontSize: 13 }}>
-                  {error}
-                </div>
-              )}
+              <Field label="Nota (opcional)"><input name="nota" value={form.nota} onChange={handleFormChange} placeholder="Ej: Cumpleaños, alergias..." style={inp} /></Field>
+              {error && <div style={{ background: "#2a1010", border: "1px solid #5a2020", color: "#cb7e7e", padding: "10px 14px", borderRadius: 4, fontSize: 13 }}>{error}</div>}
               <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
-                <button onClick={handleSubmit} style={{ ...btn("gold"), flex: 1, padding: "12px", fontSize: 15 }}>Confirmar Reserva</button>
+                <button onClick={handleSubmit} disabled={alertaListaNegra.length > 0} style={{ ...btn("gold"), flex: 1, padding: "12px", fontSize: 15, opacity: alertaListaNegra.length > 0 ? 0.4 : 1, cursor: alertaListaNegra.length > 0 ? "not-allowed" : "pointer" }}>
+                  Confirmar Reserva
+                </button>
                 <button onClick={() => { setVista("dia"); setError(""); }} style={{ ...btn("ghost"), padding: "12px 20px" }}>Cancelar</button>
               </div>
             </div>
           </div>
         )}
 
-        {vista === "admin" && sesion.rol === "admin" && <AdminPanel sesion={sesion} />}
+        {vista === "admin" && sesion.rol === "admin" && <AdminPanel />}
       </div>
 
       {reservaAEliminar && (
@@ -834,9 +785,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
           <div style={{ background: "#15120a", border: "1px solid #3a2e1a", borderRadius: 8, padding: 32, maxWidth: 400, width: "100%", textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 14 }}>⚠️</div>
             <div style={{ fontSize: 17, color: "#f5e6c8", marginBottom: 8 }}>Cancelar reserva</div>
-            <div style={{ fontSize: 14, color: "#7a6a50", marginBottom: 24 }}>
-              ¿Cancelar la reserva de <strong style={{ color: "#e8dcc8" }}>{reservaAEliminar.nombre} {reservaAEliminar.apellido}</strong>?
-            </div>
+            <div style={{ fontSize: 14, color: "#7a6a50", marginBottom: 24 }}>¿Cancelar la reserva de <strong style={{ color: "#e8dcc8" }}>{reservaAEliminar.nombre} {reservaAEliminar.apellido}</strong>?</div>
             <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
               <button onClick={cancelarReserva} style={btn("danger")}>Sí, cancelar</button>
               <button onClick={() => setReservaAEliminar(null)} style={btn("ghost")}>Volver</button>
@@ -852,22 +801,10 @@ export default function Root() {
   const [sesion, setSesion] = useState(null);
   const [sector, setSector] = useState(null);
 
-  const handleLogin = (usuario) => {
-    setSesion(usuario);
-    setSector(null);
-  };
-
-  const handleLogout = () => {
-    setSesion(null);
-    setSector(null);
-  };
+  const handleLogin = (usuario) => { setSesion(usuario); setSector(null); };
+  const handleLogout = () => { setSesion(null); setSector(null); };
 
   if (!sesion) return <Login onLogin={handleLogin} />;
-
-  // Admin no necesita elegir sector
-  if (sesion.rol !== "admin" && !sector) {
-    return <SeleccionSector sesion={sesion} onSectorElegido={setSector} />;
-  }
-
+  if (sesion.rol !== "admin" && !sector) return <SeleccionSector sesion={sesion} onSectorElegido={setSector} />;
   return <ReservasApp sesion={sesion} sectorSesion={sector} onLogout={handleLogout} onCambiarSector={() => setSector(null)} />;
 }
