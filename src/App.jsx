@@ -568,7 +568,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   const [clientesParsed, setClientesParsed] = useState([]);
   const [alertaListaNegra, setAlertaListaNegra] = useState([]);
   const [listaNegra, setListaNegra] = useState([]);
-  const [form, setForm] = useState({ fecha: today(), personas: 2, mesa_id: "", nota: "" });
+  const [form, setForm] = useState({ fecha: today(), mesa_id: "", nota: "" });
   const [error, setError] = useState("");
   const [exitoMsg, setExitoMsg] = useState("");
 
@@ -599,6 +599,11 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     if (!texto.trim()) { setClientesParsed([]); return; }
     const clientes = parsearTodosClientes(texto);
     setClientesParsed(clientes);
+    // Validar máximo de personas
+    if (clientes.length > 5) {
+      setError(`⚠️ Máximo 5 personas por mesa. Tienes ${clientes.length}.`);
+      return;
+    }
     // Validar RUTs - obligatorio y válido
     const sinRut = clientes.filter(c => !c.rut || c.rut.trim() === "");
     const rutsInvalidos = clientes.filter(c => c.rut && c.rut.trim() !== "" && !validarRut(c.rut));
@@ -629,6 +634,8 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     if (!titular.nombre) return setError("No se pudo identificar el nombre del titular.");
     if (!titular.rut) return setError("No se pudo identificar el RUT del titular.");
     if (!form.mesa_id) return setError("Selecciona una mesa en el mapa.");
+    // Validar máximo de personas
+    if (clientesParsed.length > 5) return setError(`⚠️ Máximo 5 personas por mesa. Tienes ${clientesParsed.length}.`);
     // Validar RUTs - obligatorio y válido
     const sinRut = clientesParsed.filter(c => !c.rut || c.rut.trim() === "");
     if (sinRut.length > 0) return setError(`⚠️ RUT obligatorio: ${sinRut.map(c => `${c.nombre} ${c.apellido}`).join(", ")} no tiene RUT.`);
@@ -658,14 +665,14 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
 
     await db.post("reservas", {
       nombre: titular.nombre, apellido: titular.apellido, rut: titular.rut,
-      fecha: form.fecha, hora: "23:30", personas: parseInt(form.personas),
+      fecha: form.fecha, hora: "23:30", personas: clientesParsed.length,
       mesa_id: parseInt(form.mesa_id), nota: form.nota.trim(),
       participantes: clientesParsed.slice(1),
       garzon: sesion.nombre,
     });
     const fechaReserva = form.fecha;
     setTextoCliente(""); setClientesParsed([]); setAlertaListaNegra([]);
-    setForm({ fecha: today(), personas: 2, mesa_id: "", nota: "" });
+    setForm({ fecha: today(), mesa_id: "", nota: "" });
     // Cargar reservas directamente antes de cambiar de vista
     setCargando(true);
     const dataFresh = await db.get("reservas", `fecha=eq.${fechaReserva}&select=*&order=nombre.asc`);
@@ -941,11 +948,12 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
               </div>
 
               <Field label="Fecha"><input type="date" name="fecha" value={form.fecha} onChange={handleFormChange} style={inp} /></Field>
-              <Field label="Personas">
-                <select name="personas" value={form.personas} onChange={handleFormChange} style={inp}>
-                  {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </Field>
+              {clientesParsed.length > 0 && (
+                <div style={{ background: "#15120a", border: `1px solid ${clientesParsed.length > 5 ? "#7a2020" : "#3a5a1a"}`, borderRadius: 4, padding: "10px 14px", fontSize: 13, color: clientesParsed.length > 5 ? "#f87171" : "#7ecb7e" }}>
+                  👥 {clientesParsed.length} persona{clientesParsed.length > 1 ? "s" : ""} detectada{clientesParsed.length > 1 ? "s" : ""}
+                  {clientesParsed.length > 5 && <span style={{ marginLeft: 8, fontWeight: "bold" }}>— máximo 5</span>}
+                </div>
+              )}
               <div>
                 <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 8 }}>Seleccionar Mesa — haz clic en el mapa</label>
                 <FloorMap reservas={reservas} fecha={form.fecha} mesaSeleccionada={form.mesa_id ? parseInt(form.mesa_id) : null} onMesaClick={(id) => { setForm(p => ({ ...p, mesa_id: String(id) })); setError(""); }} soloZona={sesion.rol !== "admin" ? sectorSesion : null} />
