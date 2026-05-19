@@ -684,6 +684,10 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                           <div style={{ background: "#1e1608", border: "1px solid #3a2e1a", borderRadius: 4, padding: "6px 14px", textAlign: "center", minWidth: 58 }}>
                             <div style={{ fontSize: 16, color: "#f5e6c8", fontWeight: "bold" }}>23:30</div>
                           </div>
+                          <div style={{ background: "#1e1608", border: "1px solid #b8914a", borderRadius: 4, padding: "6px 14px", textAlign: "center", minWidth: 58 }}>
+                            <div style={{ fontSize: 10, color: "#b8914a", letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 }}>Mesa</div>
+                            <div style={{ fontSize: 16, color: "#f5e6c8", fontWeight: "bold" }}>{r.mesa_id}</div>
+                          </div>
                           <div>
                             <div style={{ fontSize: 15, color: "#f5e6c8", marginBottom: 3 }}>
                               {r.nombre} {r.apellido}
@@ -695,7 +699,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                             </div>
                             <div style={{ fontSize: 12, color: "#7a6a50" }}>
                               🪪 {r.rut} &nbsp;·&nbsp; 👥 {r.personas} pers. &nbsp;·&nbsp;
-                              <span style={{ color: "#b8914a" }}>Mesa {r.mesa_id} ({mesa?.zona})</span>
+                              <span style={{ color: "#7a6a50" }}>{mesa?.zona}</span>
                             </div>
                             {r.nota && <div style={{ fontSize: 12, color: "#b8914a", marginTop: 3 }}>📝 {r.nota}</div>}
                           </div>
