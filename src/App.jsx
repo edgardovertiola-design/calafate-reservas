@@ -678,6 +678,59 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
 
   const cancelarReserva = async () => { await db.delete("reservas", reservaAEliminar.id); setReservaAEliminar(null); flash("Reserva cancelada."); cargarReservas(); };
 
+  const exportarPDF = () => {
+    const fecha = new Date(fechaSeleccionada + "T12:00:00").toLocaleDateString("es-CL", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    const filas = reservasFiltradas.map(r => {
+      const mesa = MESAS.find(m => m.id === r.mesa_id);
+      const participantes = Array.isArray(r.participantes) ? r.participantes : [];
+      const participantesHtml = participantes.length > 0
+        ? `<div style="margin-top:4px;padding-left:12px;font-size:11px;color:#555">${participantes.map((p, i) => `${i + 2}. ${p.nombre} ${p.apellido} — ${p.rut}`).join("<br/>")}</div>`
+        : "";
+      return `
+        <tr>
+          <td style="padding:8px;border-bottom:1px solid #ddd;font-weight:bold">${r.mesa_id}</td>
+          <td style="padding:8px;border-bottom:1px solid #ddd">${mesa?.zona || ""}</td>
+          <td style="padding:8px;border-bottom:1px solid #ddd">
+            <strong>${r.nombre} ${r.apellido}</strong><br/>
+            <span style="font-size:11px;color:#666">${r.rut}</span>
+            ${participantesHtml}
+          </td>
+          <td style="padding:8px;border-bottom:1px solid #ddd;text-align:center">${r.personas}</td>
+          <td style="padding:8px;border-bottom:1px solid #ddd;font-size:11px;color:#666">${r.nota || ""}</td>
+          <td style="padding:8px;border-bottom:1px solid #ddd;font-size:11px;color:#666">${r.garzon || ""}</td>
+        </tr>`;
+    }).join("");
+
+    const html = `
+      <html><head><meta charset="utf-8">
+      <title>Reservas Calafate ${fechaSeleccionada}</title>
+      <style>
+        body { font-family: Georgia, serif; padding: 30px; color: #222; }
+        h1 { font-size: 22px; margin-bottom: 4px; }
+        h2 { font-size: 14px; font-weight: normal; color: #666; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #1a1208; color: #f5e6c8; padding: 10px 8px; text-align: left; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+        tr:nth-child(even) { background: #f9f6f0; }
+        .footer { margin-top: 20px; font-size: 11px; color: #999; }
+      </style>
+      </head><body>
+      <h1>🎶 Calafate Discoteca</h1>
+      <h2>Reservas del ${fecha}${sectorSesion && sesion.rol !== "admin" ? ` · ${sectorSesion}` : ""} — ${reservasFiltradas.length} reservas</h2>
+      <table>
+        <thead><tr>
+          <th>Mesa</th><th>Sector</th><th>Titular / Participantes</th><th>Pers.</th><th>Nota</th><th>Garzón</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
+      </table>
+      <div class="footer">Generado el ${new Date().toLocaleString("es-CL")}</div>
+      </body></html>`;
+
+    const ventana = window.open("", "_blank");
+    ventana.document.write(html);
+    ventana.document.close();
+    ventana.print();
+  };
+
   const tabs = [
     { key: "dia", label: "Reservas del día" },
     { key: "mapa", label: "Mapa del local" },
@@ -725,6 +778,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                 {busqueda ? `${reservasFiltradas.length} de ${reservasPorSector.length} reservas` : `${reservasFiltradas.length} reservas${sectorSesion && sesion.rol !== "admin" ? ` · ${sectorSesion}` : ""}`}
               </span>
               <button onClick={cargarReservas} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px" }}>↻ Actualizar</button>
+              <button onClick={exportarPDF} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px", color: "#b8914a" }}>📄 Exportar PDF</button>
               {sesion.rol !== "admin" && (
                 <button onClick={onCambiarSector} title="Cambiar sector" style={{ ...btn("ghost"), fontSize: 16, padding: "4px 10px", color: "#b8914a", borderColor: "#3a2e1a" }}>🏠</button>
               )}
