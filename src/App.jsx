@@ -568,7 +568,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   const [clientesParsed, setClientesParsed] = useState([]);
   const [alertaListaNegra, setAlertaListaNegra] = useState([]);
   const [listaNegra, setListaNegra] = useState([]);
-  const [form, setForm] = useState({ fecha: today(), mesa_id: "", nota: "" });
+  const [form, setForm] = useState({ fecha: today(), mesa_id: "", nota: "Reserva" });
   const [error, setError] = useState("");
   const [exitoMsg, setExitoMsg] = useState("");
 
@@ -672,7 +672,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     });
     const fechaReserva = form.fecha;
     setTextoCliente(""); setClientesParsed([]); setAlertaListaNegra([]);
-    setForm({ fecha: today(), mesa_id: "", nota: "" });
+    setForm({ fecha: today(), mesa_id: "", nota: "Reserva" });
     // Cargar reservas directamente antes de cambiar de vista
     setCargando(true);
     const dataFresh = await db.get("reservas", `fecha=eq.${fechaReserva}&select=*&order=nombre.asc`);
@@ -963,7 +963,27 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                   </div>
                 )}
               </div>
-              <Field label="Nota (opcional)"><input name="nota" value={form.nota} onChange={handleFormChange} placeholder="Ej: Cumpleaños, alergias..." style={inp} /></Field>
+              <Field label="Motivo">
+                <div style={{ display: "flex", gap: 10 }}>
+                  {["Cumpleaños", "Reserva", "Evento especial"].map(opcion => (
+                    <button
+                      key={opcion}
+                      onClick={() => setForm(p => ({ ...p, nota: opcion }))}
+                      style={{
+                        flex: 1, padding: "9px 6px", borderRadius: 3, cursor: "pointer",
+                        fontFamily: "'Georgia', serif", fontSize: 13,
+                        background: form.nota === opcion ? "#b8914a" : "#1a1508",
+                        color: form.nota === opcion ? "#0f0e0c" : "#7a6a50",
+                        border: form.nota === opcion ? "1px solid #b8914a" : "1px solid #2a2010",
+                        fontWeight: form.nota === opcion ? "bold" : "normal",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      {opcion}
+                    </button>
+                  ))}
+                </div>
+              </Field>
               {error && <div style={{ background: "#2a1010", border: "1px solid #5a2020", color: "#cb7e7e", padding: "10px 14px", borderRadius: 4, fontSize: 13 }}>{error}</div>}
               <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
                 <button onClick={handleSubmit} disabled={alertaListaNegra.length > 0} style={{ ...btn("gold"), flex: 1, padding: "12px", fontSize: 15, opacity: alertaListaNegra.length > 0 ? 0.4 : 1, cursor: alertaListaNegra.length > 0 ? "not-allowed" : "pointer" }}>
