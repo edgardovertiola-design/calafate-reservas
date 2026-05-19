@@ -749,9 +749,14 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
       <div style={{ background: "linear-gradient(180deg, #1a1208 0%, #0f0e0c 100%)", borderBottom: "1px solid #3a2e1a", padding: "20px 24px 0" }}>
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 10, letterSpacing: 6, color: "#b8914a", textTransform: "uppercase", marginBottom: 4 }}>Sistema de Reservas</div>
-              <h1 style={{ margin: 0, fontSize: 26, fontWeight: "normal", color: "#f5e6c8", letterSpacing: 1 }}>🎶 Calafate Discoteca</h1>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div>
+                <div style={{ fontSize: 10, letterSpacing: 6, color: "#b8914a", textTransform: "uppercase", marginBottom: 4 }}>Sistema de Reservas</div>
+                <h1 style={{ margin: 0, fontSize: 26, fontWeight: "normal", color: "#f5e6c8", letterSpacing: 1 }}>🎶 Calafate Discoteca</h1>
+              </div>
+              {sesion.rol !== "admin" && (
+                <button onClick={onCambiarSector} title="Cambiar sector" style={{ background: "none", border: "1px solid #3a2e1a", borderRadius: 6, fontSize: 20, padding: "6px 10px", color: "#b8914a", cursor: "pointer", marginTop: 6 }}>🏠</button>
+              )}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <div style={{ textAlign: "right" }}>
@@ -786,9 +791,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
               </span>
               <button onClick={cargarReservas} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px" }}>↻ Actualizar</button>
               <button onClick={exportarPDF} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px", color: "#b8914a" }}>📄 Exportar PDF</button>
-              {sesion.rol !== "admin" && (
-                <button onClick={onCambiarSector} title="Cambiar sector" style={{ ...btn("ghost"), fontSize: 16, padding: "4px 10px", color: "#b8914a", borderColor: "#3a2e1a" }}>🏠</button>
-              )}
+
             </div>
             <div style={{ position: "relative", marginBottom: 16 }}>
               <input
