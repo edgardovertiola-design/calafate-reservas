@@ -392,12 +392,20 @@ function AdminPanel() {
   const cargarIntentos = async () => { setCargandoIntentos(true); const data = await db.get("intentos_bloqueados", "select=*&order=fecha_intento.desc"); setIntentos(data); setCargandoIntentos(false); };
   const marcarVisto = async (id) => { await db.patch("intentos_bloqueados", id, { visto: true }); cargarIntentos(); };
   const cargarLog = async () => { setCargandoLog(true); const data = await db.get("log_actividad", "select=*&order=fecha_accion.desc&limit=100"); setLogActividad(Array.isArray(data) ? data : []); setCargandoLog(false); };
+  const sumarDias = (fechaStr, dias) => {
+    const partes = fechaStr.split("-");
+    const d = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]));
+    d.setDate(d.getDate() + dias);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${dd}`;
+  };
+
   const cargarResumen = async (desde) => {
     setCargandoResumen(true);
-    const hasta = new Date(desde + "T12:00:00");
-    hasta.setDate(hasta.getDate() + 6);
-    const hastaStr = hasta.toISOString().split("T")[0];
-    const data = await db.get("reservas", `fecha=gte.${desde}&fecha=lte.${hastaStr}&select=*&order=fecha.asc`);
+    const hasta = sumarDias(desde, 6);
+    const data = await db.get("reservas", `fecha=gte.${desde}&fecha=lte.${hasta}&select=*&order=fecha.asc`);
     setResumen(Array.isArray(data) ? data : []);
     setCargandoResumen(false);
   };
@@ -564,16 +572,15 @@ function AdminPanel() {
                 <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 12 }}>Reservas por noche</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {Array.from({ length: 7 }, (_, i) => {
-                    const d = new Date(fechaResumen + "T12:00:00");
-                    d.setDate(d.getDate() + i);
-                    const fecha = d.toISOString().split("T")[0];
+                    const fecha = sumarDias(fechaResumen, i);
                     const cantidad = resumen.filter(r => r.fecha === fecha).length;
                     const max = Math.max(...Array.from({ length: 7 }, (_, j) => {
-                      const dd = new Date(fechaResumen + "T12:00:00"); dd.setDate(dd.getDate() + j);
-                      return resumen.filter(r => r.fecha === dd.toISOString().split("T")[0]).length;
+                      return resumen.filter(r => r.fecha === sumarDias(fechaResumen, j)).length;
                     }), 1);
                     const pct = Math.round((cantidad / max) * 100);
-                    const label = d.toLocaleDateString("es-CL", { weekday: "short", day: "numeric", month: "short" });
+                    const partes = fecha.split("-");
+                    const dLabel = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]));
+                    const label = dLabel.toLocaleDateString("es-CL", { weekday: "short", day: "numeric", month: "short" });
                     return (
                       <div key={fecha} style={{ display: "flex", alignItems: "center", gap: 12 }}>
                         <div style={{ width: 90, fontSize: 12, color: "#7a6a50", textAlign: "right", flexShrink: 0 }}>{label}</div>
