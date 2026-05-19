@@ -138,8 +138,27 @@ function parsearLinea(linea) {
   return { nombre: partes[0] || "", apellido: partes.slice(1, rutIndex).join(" ") || "", rut: partes[rutIndex] };
 }
 
+function tieneRut(linea) {
+  const partes = linea.trim().split(/\s+/);
+  return partes.some(p => /[.\-]/.test(p) || /^\d{6,8}[kK\d]$/.test(p));
+}
+
 function parsearTodosClientes(texto) {
-  return texto.split("\n").map(l => l.trim()).filter(l => l.length > 0).map(parsearLinea).filter(Boolean);
+  const lineas = texto.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+  const combinadas = [];
+  let i = 0;
+  while (i < lineas.length) {
+    const lineaActual = lineas[i];
+    const siguienteLinea = lineas[i + 1];
+    if (!tieneRut(lineaActual) && siguienteLinea && tieneRut(siguienteLinea)) {
+      combinadas.push(`${lineaActual} ${siguienteLinea}`);
+      i += 2;
+    } else {
+      combinadas.push(lineaActual);
+      i++;
+    }
+  }
+  return combinadas.map(parsearLinea).filter(Boolean);
 }
 
 function normalizarRut(rut) {
