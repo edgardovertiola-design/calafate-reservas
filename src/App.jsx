@@ -1082,6 +1082,8 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   );
 }
 
+const TIMEOUT_MS = 15 * 60 * 1000; // 15 minutos
+
 export default function Root() {
   const [sesion, setSesion] = useState(() => {
     try { const s = localStorage.getItem("calafate_sesion"); return s ? JSON.parse(s) : null; } catch { return null; }
@@ -1090,16 +1092,32 @@ export default function Root() {
     try { return localStorage.getItem("calafate_sector") || null; } catch { return null; }
   });
 
-  const handleLogin = (usuario) => {
-    setSesion(usuario);
-    setSector(null);
-    try { localStorage.setItem("calafate_sesion", JSON.stringify(usuario)); localStorage.removeItem("calafate_sector"); } catch {}
-  };
-
   const handleLogout = () => {
     setSesion(null);
     setSector(null);
     try { localStorage.removeItem("calafate_sesion"); localStorage.removeItem("calafate_sector"); } catch {}
+  };
+
+  // Timeout de inactividad
+  useEffect(() => {
+    if (!sesion) return;
+    let timer = setTimeout(handleLogout, TIMEOUT_MS);
+    const resetTimer = () => {
+      clearTimeout(timer);
+      timer = setTimeout(handleLogout, TIMEOUT_MS);
+    };
+    const eventos = ["click", "keydown", "mousemove", "touchstart", "scroll"];
+    eventos.forEach(e => window.addEventListener(e, resetTimer));
+    return () => {
+      clearTimeout(timer);
+      eventos.forEach(e => window.removeEventListener(e, resetTimer));
+    };
+  }, [sesion]);
+
+  const handleLogin = (usuario) => {
+    setSesion(usuario);
+    setSector(null);
+    try { localStorage.setItem("calafate_sesion", JSON.stringify(usuario)); localStorage.removeItem("calafate_sector"); } catch {}
   };
 
   const handleSectorElegido = (s) => {
