@@ -406,9 +406,7 @@ function AdminPanel() {
   const cargarResumen = async (desde) => {
     setCargandoResumen(true);
     const hasta = sumarDias(desde, 6);
-    console.log("Cargando resumen desde:", desde, "hasta:", hasta);
     const data = await db.get("reservas", `fecha=gte.${desde}&fecha=lte.${hasta}&select=*&order=fecha.asc`);
-    console.log("Reservas obtenidas:", data);
     setResumen(Array.isArray(data) ? data : []);
     setCargandoResumen(false);
   };
