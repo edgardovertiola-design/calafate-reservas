@@ -835,13 +835,36 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
 }
 
 export default function Root() {
-  const [sesion, setSesion] = useState(null);
-  const [sector, setSector] = useState(null);
+  const [sesion, setSesion] = useState(() => {
+    try { const s = localStorage.getItem("calafate_sesion"); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
+  const [sector, setSector] = useState(() => {
+    try { return localStorage.getItem("calafate_sector") || null; } catch { return null; }
+  });
 
-  const handleLogin = (usuario) => { setSesion(usuario); setSector(null); };
-  const handleLogout = () => { setSesion(null); setSector(null); };
+  const handleLogin = (usuario) => {
+    setSesion(usuario);
+    setSector(null);
+    try { localStorage.setItem("calafate_sesion", JSON.stringify(usuario)); localStorage.removeItem("calafate_sector"); } catch {}
+  };
+
+  const handleLogout = () => {
+    setSesion(null);
+    setSector(null);
+    try { localStorage.removeItem("calafate_sesion"); localStorage.removeItem("calafate_sector"); } catch {}
+  };
+
+  const handleSectorElegido = (s) => {
+    setSector(s);
+    try { localStorage.setItem("calafate_sector", s); } catch {}
+  };
+
+  const handleCambiarSector = () => {
+    setSector(null);
+    try { localStorage.removeItem("calafate_sector"); } catch {}
+  };
 
   if (!sesion) return <Login onLogin={handleLogin} />;
-  if (sesion.rol !== "admin" && !sector) return <SeleccionSector sesion={sesion} onSectorElegido={setSector} />;
-  return <ReservasApp sesion={sesion} sectorSesion={sector} onLogout={handleLogout} onCambiarSector={() => setSector(null)} />;
+  if (sesion.rol !== "admin" && !sector) return <SeleccionSector sesion={sesion} onSectorElegido={handleSectorElegido} />;
+  return <ReservasApp sesion={sesion} sectorSesion={sector} onLogout={handleLogout} onCambiarSector={handleCambiarSector} />;
 }
