@@ -545,13 +545,17 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   const reservasFiltradas = useMemo(() => sesion.rol === "admin" ? reservas : reservas.filter(r => { const mesa = MESAS.find(m => m.id === r.mesa_id); return mesa?.zona === sectorSesion; }), [reservas, sesion.rol, sectorSesion]);
   const mesasDisponibles = () => { const ocupadas = reservas.map(r => r.mesa_id); return MESAS.filter(m => !ocupadas.includes(m.id)); };
 
-  const handlePasteCliente = (texto) => {
+  const handlePasteCliente = async (texto) => {
     setTextoCliente(texto);
     setAlertaListaNegra([]);
     if (!texto.trim()) { setClientesParsed([]); return; }
     const clientes = parsearTodosClientes(texto);
     setClientesParsed(clientes);
-    const bloqueados = clientes.map(c => ({ cliente: c, match: estaEnListaNegra(c, listaNegra) })).filter(x => x.match);
+    // Cargar lista negra fresca desde Supabase en cada verificación
+    const lnFresh = await db.get("lista_negra", "select=*");
+    const lnArray = Array.isArray(lnFresh) ? lnFresh : [];
+    setListaNegra(lnArray);
+    const bloqueados = clientes.map(c => ({ cliente: c, match: estaEnListaNegra(c, lnArray) })).filter(x => x.match);
     setAlertaListaNegra(bloqueados);
     setError("");
   };
@@ -568,16 +572,22 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     if (!titular.nombre) return setError("No se pudo identificar el nombre del titular.");
     if (!titular.rut) return setError("No se pudo identificar el RUT del titular.");
     if (!form.mesa_id) return setError("Selecciona una mesa en el mapa.");
-    if (alertaListaNegra.length > 0) {
+    // Verificar lista negra nuevamente al momento de confirmar
+    const lnFinal = await db.get("lista_negra", "select=*");
+    const lnFinalArray = Array.isArray(lnFinal) ? lnFinal : [];
+    const bloqueadosFinal = clientesParsed.map(c => ({ cliente: c, match: estaEnListaNegra(c, lnFinalArray) })).filter(x => x.match);
+    if (bloqueadosFinal.length > 0) setAlertaListaNegra(bloqueadosFinal);
+
+    if (bloqueadosFinal.length > 0) {
       // Registrar intento bloqueado
-      for (const x of alertaListaNegra) {
+      for (const x of bloqueadosFinal) {
         await db.post("intentos_bloqueados", {
           cliente_nombre: x.cliente.nombre, cliente_apellido: x.cliente.apellido,
           cliente_rut: x.cliente.rut, garzon_nombre: sesion.nombre,
           fecha_reserva: form.fecha, mesa_id: parseInt(form.mesa_id), visto: false,
         });
       }
-      return setError(`🚫 Reserva bloqueada: ${alertaListaNegra.map(x => `${x.cliente.nombre} ${x.cliente.apellido}`).join(", ")} está en lista negra. Se notificó al administrador.`);
+      return setError(`🚫 Reserva bloqueada: ${bloqueadosFinal.map(x => `${x.cliente.nombre} ${x.cliente.apellido}`).join(", ")} está en lista negra. Se notificó al administrador.`);
     }
     const mesa = MESAS.find(m => m.id === parseInt(form.mesa_id));
     if (parseInt(form.personas) > mesa.capacidad) return setError(`Mesa ${mesa.id}: máximo ${mesa.capacidad} personas.`);
