@@ -661,6 +661,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
       fecha: form.fecha, hora: "23:30", personas: parseInt(form.personas),
       mesa_id: parseInt(form.mesa_id), nota: form.nota.trim(),
       participantes: clientesParsed.slice(1),
+      garzon: sesion.nombre,
     });
     const fechaReserva = form.fecha;
     setTextoCliente(""); setClientesParsed([]); setAlertaListaNegra([]);
@@ -774,6 +775,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                             <div style={{ fontSize: 12, color: "#7a6a50" }}>
                               🪪 {r.rut} &nbsp;·&nbsp; 👥 {r.personas} pers. &nbsp;·&nbsp;
                               <span style={{ color: "#7a6a50" }}>{mesa?.zona}</span>
+                              {r.garzon && <span> &nbsp;·&nbsp; 👤 {r.garzon}</span>}
                             </div>
                             {r.nota && <div style={{ fontSize: 12, color: "#b8914a", marginTop: 3 }}>📝 {r.nota}</div>}
                           </div>
