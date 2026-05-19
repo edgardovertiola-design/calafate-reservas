@@ -141,13 +141,47 @@ function parsearTodosClientes(texto) {
   return texto.split("\n").map(l => l.trim()).filter(l => l.length > 0).map(parsearLinea).filter(Boolean);
 }
 
+function normalizarRut(rut) {
+  return (rut || "").toLowerCase().trim().replace(/\./g, "").replace(/\s/g, "");
+}
+
+function normalizarTexto(s) {
+  return (s || "").toLowerCase().trim()
+    .normalize("NFD").replace(/[̀-ͯ]/g, ""); // quita tildes
+}
+
+function validarRut(rut) {
+  if (!rut || rut.trim() === "") return false;
+  const rutLimpio = rut.toLowerCase().trim().replace(/\./g, "").replace(/\s/g, "");
+  if (!/^\d{7,8}-[\dk]$/.test(rutLimpio)) return false;
+  const [numero, dv] = rutLimpio.split("-");
+  let suma = 0;
+  let multiplo = 2;
+  for (let i = numero.length - 1; i >= 0; i--) {
+    suma += parseInt(numero[i]) * multiplo;
+    multiplo = multiplo === 7 ? 2 : multiplo + 1;
+  }
+  const dvEsperado = 11 - (suma % 11);
+  const dvCalc = dvEsperado === 11 ? "0" : dvEsperado === 10 ? "k" : String(dvEsperado);
+  return dvCalc === dv;
+}
+
 function estaEnListaNegra(cliente, listaNegra) {
   if (!Array.isArray(listaNegra)) return null;
-  const n = s => s?.toLowerCase().trim() || "";
-  return listaNegra.find(ln =>
-    (n(ln.rut) === n(cliente.rut) && n(cliente.rut) !== "") ||
-    (n(ln.nombre) === n(cliente.nombre) && n(ln.apellido) === n(cliente.apellido) && n(cliente.nombre) !== "")
-  ) || null;
+  return listaNegra.find(ln => {
+    const rutCliente = normalizarRut(cliente.rut);
+    const rutLn = normalizarRut(ln.rut);
+    const rutCoincide = rutCliente !== "" && rutLn !== "" && rutCliente === rutLn;
+
+    const nombreCliente = normalizarTexto(cliente.nombre);
+    const apellidoCliente = normalizarTexto(cliente.apellido);
+    const nombreLn = normalizarTexto(ln.nombre);
+    const apellidoLn = normalizarTexto(ln.apellido);
+    const nombreCoincide = nombreCliente !== "" && apellidoCliente !== "" &&
+      nombreCliente === nombreLn && apellidoCliente === apellidoLn;
+
+    return rutCoincide || nombreCoincide;
+  }) || null;
 }
 
 function FloorMap({ reservas, fecha, onMesaClick, mesaSeleccionada, soloZona }) {
@@ -563,13 +597,19 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     if (!texto.trim()) { setClientesParsed([]); return; }
     const clientes = parsearTodosClientes(texto);
     setClientesParsed(clientes);
+    // Validar RUTs
+    const rutsInvalidos = clientes.filter(c => c.rut && !validarRut(c.rut));
+    if (rutsInvalidos.length > 0) {
+      setError(`⚠️ RUT inválido: ${rutsInvalidos.map(c => `${c.nombre} ${c.apellido} (${c.rut})`).join(", ")}`);
+    } else {
+      setError("");
+    }
     // Cargar lista negra fresca desde Supabase en cada verificación
     const lnFresh = await db.get("lista_negra", "select=*");
     const lnArray = Array.isArray(lnFresh) ? lnFresh : [];
     setListaNegra(lnArray);
     const bloqueados = clientes.map(c => ({ cliente: c, match: estaEnListaNegra(c, lnArray) })).filter(x => x.match);
     setAlertaListaNegra(bloqueados);
-    setError("");
   };
 
   const handleFormChange = (e) => {
@@ -584,6 +624,9 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     if (!titular.nombre) return setError("No se pudo identificar el nombre del titular.");
     if (!titular.rut) return setError("No se pudo identificar el RUT del titular.");
     if (!form.mesa_id) return setError("Selecciona una mesa en el mapa.");
+    // Validar RUTs antes de guardar
+    const rutsInvalidos = clientesParsed.filter(c => c.rut && !validarRut(c.rut));
+    if (rutsInvalidos.length > 0) return setError(`⚠️ RUT inválido: ${rutsInvalidos.map(c => `${c.nombre} ${c.apellido} (${c.rut})`).join(", ")}`);
     // Verificar lista negra nuevamente al momento de confirmar
     const lnFinal = await db.get("lista_negra", "select=*");
     const lnFinalArray = Array.isArray(lnFinal) ? lnFinal : [];
