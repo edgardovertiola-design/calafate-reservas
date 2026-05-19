@@ -375,6 +375,10 @@ function AdminPanel() {
   const [cargandoLog, setCargandoLog] = useState(false);
   const [resumen, setResumen] = useState([]);
   const [cargandoResumen, setCargandoResumen] = useState(false);
+  const [fechaResumen, setFechaResumen] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 6);
+    return d.toISOString().split("T")[0];
+  });
 
   const flash = (t) => { setMsg(t); setTimeout(() => setMsg(""), 3000); };
 
@@ -388,12 +392,8 @@ function AdminPanel() {
   const cargarIntentos = async () => { setCargandoIntentos(true); const data = await db.get("intentos_bloqueados", "select=*&order=fecha_intento.desc"); setIntentos(data); setCargandoIntentos(false); };
   const marcarVisto = async (id) => { await db.patch("intentos_bloqueados", id, { visto: true }); cargarIntentos(); };
   const cargarLog = async () => { setCargandoLog(true); const data = await db.get("log_actividad", "select=*&order=fecha_accion.desc&limit=100"); setLogActividad(Array.isArray(data) ? data : []); setCargandoLog(false); };
-  const cargarResumen = async () => {
+  const cargarResumen = async (desde) => {
     setCargandoResumen(true);
-    // Obtener reservas de los últimos 7 días
-    const hace7dias = new Date();
-    hace7dias.setDate(hace7dias.getDate() - 6);
-    const desde = hace7dias.toISOString().split("T")[0];
     const data = await db.get("reservas", `fecha=gte.${desde}&select=*&order=fecha.asc`);
     setResumen(Array.isArray(data) ? data : []);
     setCargandoResumen(false);
@@ -548,6 +548,11 @@ function AdminPanel() {
 
       {tab === "resumen" && (
         <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24, flexWrap: "wrap" }}>
+            <label style={{ color: "#7a6a50", fontSize: 12, letterSpacing: 1, textTransform: "uppercase" }}>Desde:</label>
+            <input type="date" value={fechaResumen} onChange={e => setFechaResumen(e.target.value)} style={{ ...inp, width: "auto" }} />
+            <span style={{ fontSize: 12, color: "#5a4a30" }}>— mostrando 7 días</span>
+          </div>
           {cargandoResumen ? <Spinner /> : (
             <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
@@ -556,12 +561,12 @@ function AdminPanel() {
                 <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 12 }}>Reservas por noche</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {Array.from({ length: 7 }, (_, i) => {
-                    const d = new Date();
-                    d.setDate(d.getDate() - (6 - i));
+                    const d = new Date(fechaResumen + "T12:00:00");
+                    d.setDate(d.getDate() + i);
                     const fecha = d.toISOString().split("T")[0];
                     const cantidad = resumen.filter(r => r.fecha === fecha).length;
                     const max = Math.max(...Array.from({ length: 7 }, (_, j) => {
-                      const dd = new Date(); dd.setDate(dd.getDate() - (6 - j));
+                      const dd = new Date(fechaResumen + "T12:00:00"); dd.setDate(dd.getDate() + j);
                       return resumen.filter(r => r.fecha === dd.toISOString().split("T")[0]).length;
                     }), 1);
                     const pct = Math.round((cantidad / max) * 100);
