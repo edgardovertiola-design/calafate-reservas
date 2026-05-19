@@ -394,7 +394,10 @@ function AdminPanel() {
   const cargarLog = async () => { setCargandoLog(true); const data = await db.get("log_actividad", "select=*&order=fecha_accion.desc&limit=100"); setLogActividad(Array.isArray(data) ? data : []); setCargandoLog(false); };
   const cargarResumen = async (desde) => {
     setCargandoResumen(true);
-    const data = await db.get("reservas", `fecha=gte.${desde}&select=*&order=fecha.asc`);
+    const hasta = new Date(desde + "T12:00:00");
+    hasta.setDate(hasta.getDate() + 6);
+    const hastaStr = hasta.toISOString().split("T")[0];
+    const data = await db.get("reservas", `fecha=gte.${desde}&fecha=lte.${hastaStr}&select=*&order=fecha.asc`);
     setResumen(Array.isArray(data) ? data : []);
     setCargandoResumen(false);
   };
