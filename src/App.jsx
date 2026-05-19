@@ -764,10 +764,33 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
 
         {vista === "mapa" && (
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16, flexWrap: "wrap" }}>
               <label style={{ color: "#7a6a50", fontSize: 12, letterSpacing: 1, textTransform: "uppercase" }}>Fecha:</label>
               <input type="date" value={fechaSeleccionada} onChange={e => setFechaSeleccionada(e.target.value)} style={{ ...inp, width: "auto" }} />
-              <span style={{ background: "#2a1e0a", border: "1px solid #3a2e1a", color: "#7ecb7e", padding: "5px 14px", borderRadius: 20, fontSize: 13 }}>{mesasDisponibles().length} disponibles</span>
+              <span style={{ background: "#2a1e0a", border: "1px solid #3a2e1a", color: "#7ecb7e", padding: "5px 14px", borderRadius: 20, fontSize: 13 }}>{mesasDisponibles().length} disponibles en total</span>
+            </div>
+            {/* Resumen por sector */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 20 }}>
+              {SECTORES.map(zona => {
+                const totalZona = MESAS.filter(m => m.zona === zona).length;
+                const ocupadasZona = reservas.filter(r => r.fecha === fechaSeleccionada && MESAS.find(m => m.id === r.mesa_id)?.zona === zona).length;
+                const disponiblesZona = totalZona - ocupadasZona;
+                const porcentaje = Math.round((disponiblesZona / totalZona) * 100);
+                const color = porcentaje > 50 ? "#7ecb7e" : porcentaje > 20 ? "#cb9e50" : "#cb7e7e";
+                const emoji = zona === "Sector Isla" ? "🏝️" : zona === "Sector Pantallas" ? "📺" : zona === "Sector Escape" ? "🚪" : "🎧";
+                return (
+                  <div key={zona} style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 8, padding: "12px 16px" }}>
+                    <div style={{ fontSize: 11, color: "#7a6a50", marginBottom: 6 }}>{emoji} {zona}</div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                      <span style={{ fontSize: 22, fontWeight: "bold", color }}>{disponiblesZona}</span>
+                      <span style={{ fontSize: 12, color: "#5a4a30" }}>/ {totalZona} disponibles</span>
+                    </div>
+                    <div style={{ marginTop: 8, height: 4, background: "#2a2010", borderRadius: 2, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${porcentaje}%`, background: color, borderRadius: 2, transition: "width 0.3s" }} />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             <FloorMap reservas={reservas} fecha={fechaSeleccionada} mesaSeleccionada={null} soloZona={sesion.rol !== "admin" ? sectorSesion : null} />
           </div>
