@@ -371,17 +371,21 @@ function AdminPanel() {
   const [confirmarEliminarLn, setConfirmarEliminarLn] = useState(null);
   const [intentos, setIntentos] = useState([]);
   const [cargandoIntentos, setCargandoIntentos] = useState(false);
+  const [logActividad, setLogActividad] = useState([]);
+  const [cargandoLog, setCargandoLog] = useState(false);
 
   const flash = (t) => { setMsg(t); setTimeout(() => setMsg(""), 3000); };
 
   useEffect(() => { cargarUsuarios(); }, []);
   useEffect(() => { if (tab === "listanegra") cargarListaNegra(); }, [tab]);
   useEffect(() => { if (tab === "intentos") cargarIntentos(); }, [tab]);
+  useEffect(() => { if (tab === "log") cargarLog(); }, [tab]);
 
   const cargarUsuarios = async () => { setCargando(true); const data = await db.get("usuarios", "select=*&order=id.asc"); setUsuarios(data); setCargando(false); };
   const cargarListaNegra = async () => { const data = await db.get("lista_negra", "select=*&order=id.desc"); setListaNegra(data); };
   const cargarIntentos = async () => { setCargandoIntentos(true); const data = await db.get("intentos_bloqueados", "select=*&order=fecha_intento.desc"); setIntentos(data); setCargandoIntentos(false); };
   const marcarVisto = async (id) => { await db.patch("intentos_bloqueados", id, { visto: true }); cargarIntentos(); };
+  const cargarLog = async () => { setCargandoLog(true); const data = await db.get("log_actividad", "select=*&order=fecha_accion.desc&limit=100"); setLogActividad(Array.isArray(data) ? data : []); setCargandoLog(false); };
 
   const guardar = async () => {
     if (!form.nombre.trim()) return setError("El nombre es obligatorio.");
@@ -433,6 +437,7 @@ function AdminPanel() {
         <button style={{ ...tabStyle("intentos") }} onClick={() => setTab("intentos")}>
           Intentos bloqueados{intentosNuevos > 0 && <span style={{ marginLeft: 6, background: "#7a2020", color: "#fca5a5", fontSize: 10, padding: "1px 6px", borderRadius: 10, fontWeight: "bold" }}>{intentosNuevos}</span>}
         </button>
+        <button style={tabStyle("log")} onClick={() => setTab("log")}>Log de actividad</button>
         <button style={tabStyle("micuenta")} onClick={() => setTab("micuenta")}>Mi cuenta</button>
       </div>
 
@@ -521,6 +526,32 @@ function AdminPanel() {
                     {i.fecha_reserva && <div style={{ fontSize: 12, color: "#9a5050", marginTop: 2 }}>📅 Intentó reservar para: {i.fecha_reserva}</div>}
                   </div>
                   {!i.visto && <button onClick={() => marcarVisto(i.id)} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px" }}>Marcar visto</button>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "log" && (
+        <div>
+          {cargandoLog ? <Spinner /> : logActividad.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "60px 20px", color: "#4a3a22", border: "1px dashed #2a1e0a", borderRadius: 6 }}>
+              <div style={{ fontSize: 38, marginBottom: 10 }}>📋</div>
+              <div>Sin actividad registrada</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {logActividad.map(l => (
+                <div key={l.id} style={{ background: "#15120a", border: "1px solid #2a2010", borderLeft: `3px solid ${l.accion === "CANCELACION" ? "#7a2020" : "#b8914a"}`, borderRadius: 6, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                      <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, fontWeight: "bold", background: l.accion === "CANCELACION" ? "#7a2020" : "#2a4a2a", color: l.accion === "CANCELACION" ? "#fca5a5" : "#7ecb7e" }}>{l.accion}</span>
+                      <span style={{ fontSize: 14, color: "#f5e6c8" }}>👤 {l.garzon}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#7a6a50" }}>{l.detalle}</div>
+                  </div>
+                  <div style={{ fontSize: 11, color: "#5a4a30" }}>{new Date(l.fecha_accion).toLocaleString("es-CL")}</div>
                 </div>
               ))}
             </div>
@@ -699,10 +730,24 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     setCargando(false);
     setFechaSeleccionada(fechaReserva);
     setVista("dia");
+    await registrarLog("RESERVA", `Mesa ${form.mesa_id} — ${titular.nombre} ${titular.apellido} (${titular.rut}), ${clientesParsed.length} persona(s)`);
     flash("¡Reserva creada correctamente!");
   };
 
-  const cancelarReserva = async () => { await db.delete("reservas", reservaAEliminar.id); setReservaAEliminar(null); flash("Reserva cancelada."); cargarReservas(); };
+  const registrarLog = async (accion, detalle) => {
+    try {
+      await db.post("log_actividad", { accion, garzon: sesion.nombre, detalle });
+    } catch {}
+  };
+
+  const cancelarReserva = async () => {
+    const r = reservaAEliminar;
+    await db.delete("reservas", r.id);
+    await registrarLog("CANCELACION", `Mesa ${r.mesa_id} — ${r.nombre} ${r.apellido} (${r.rut})`);
+    setReservaAEliminar(null);
+    flash("Reserva cancelada.");
+    cargarReservas();
+  };
 
   const exportarPDF = () => {
     const fecha = new Date(fechaSeleccionada + "T12:00:00").toLocaleDateString("es-CL", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
