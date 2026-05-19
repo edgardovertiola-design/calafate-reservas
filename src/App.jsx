@@ -373,6 +373,8 @@ function AdminPanel() {
   const [cargandoIntentos, setCargandoIntentos] = useState(false);
   const [logActividad, setLogActividad] = useState([]);
   const [cargandoLog, setCargandoLog] = useState(false);
+  const [resumen, setResumen] = useState([]);
+  const [cargandoResumen, setCargandoResumen] = useState(false);
 
   const flash = (t) => { setMsg(t); setTimeout(() => setMsg(""), 3000); };
 
@@ -386,6 +388,16 @@ function AdminPanel() {
   const cargarIntentos = async () => { setCargandoIntentos(true); const data = await db.get("intentos_bloqueados", "select=*&order=fecha_intento.desc"); setIntentos(data); setCargandoIntentos(false); };
   const marcarVisto = async (id) => { await db.patch("intentos_bloqueados", id, { visto: true }); cargarIntentos(); };
   const cargarLog = async () => { setCargandoLog(true); const data = await db.get("log_actividad", "select=*&order=fecha_accion.desc&limit=100"); setLogActividad(Array.isArray(data) ? data : []); setCargandoLog(false); };
+  const cargarResumen = async () => {
+    setCargandoResumen(true);
+    // Obtener reservas de los últimos 7 días
+    const hace7dias = new Date();
+    hace7dias.setDate(hace7dias.getDate() - 6);
+    const desde = hace7dias.toISOString().split("T")[0];
+    const data = await db.get("reservas", `fecha=gte.${desde}&select=*&order=fecha.asc`);
+    setResumen(Array.isArray(data) ? data : []);
+    setCargandoResumen(false);
+  };
 
   const guardar = async () => {
     if (!form.nombre.trim()) return setError("El nombre es obligatorio.");
@@ -437,6 +449,7 @@ function AdminPanel() {
         <button style={{ ...tabStyle("intentos") }} onClick={() => setTab("intentos")}>
           Intentos bloqueados{intentosNuevos > 0 && <span style={{ marginLeft: 6, background: "#7a2020", color: "#fca5a5", fontSize: 10, padding: "1px 6px", borderRadius: 10, fontWeight: "bold" }}>{intentosNuevos}</span>}
         </button>
+        <button style={tabStyle("resumen")} onClick={() => setTab("resumen")}>Resumen semanal</button>
         <button style={tabStyle("log")} onClick={() => setTab("log")}>Log de actividad</button>
         <button style={tabStyle("micuenta")} onClick={() => setTab("micuenta")}>Mi cuenta</button>
       </div>
@@ -528,6 +541,90 @@ function AdminPanel() {
                   {!i.visto && <button onClick={() => marcarVisto(i.id)} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px" }}>Marcar visto</button>}
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "resumen" && (
+        <div>
+          {cargandoResumen ? <Spinner /> : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+              {/* Reservas por noche */}
+              <div>
+                <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 12 }}>Reservas por noche</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {Array.from({ length: 7 }, (_, i) => {
+                    const d = new Date();
+                    d.setDate(d.getDate() - (6 - i));
+                    const fecha = d.toISOString().split("T")[0];
+                    const cantidad = resumen.filter(r => r.fecha === fecha).length;
+                    const max = Math.max(...Array.from({ length: 7 }, (_, j) => {
+                      const dd = new Date(); dd.setDate(dd.getDate() - (6 - j));
+                      return resumen.filter(r => r.fecha === dd.toISOString().split("T")[0]).length;
+                    }), 1);
+                    const pct = Math.round((cantidad / max) * 100);
+                    const label = d.toLocaleDateString("es-CL", { weekday: "short", day: "numeric", month: "short" });
+                    return (
+                      <div key={fecha} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ width: 90, fontSize: 12, color: "#7a6a50", textAlign: "right", flexShrink: 0 }}>{label}</div>
+                        <div style={{ flex: 1, height: 24, background: "#1a1508", borderRadius: 4, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${pct}%`, background: "#b8914a", borderRadius: 4, transition: "width 0.3s", display: "flex", alignItems: "center", paddingLeft: 8 }}>
+                            {cantidad > 0 && <span style={{ fontSize: 11, color: "#0f0e0c", fontWeight: "bold" }}>{cantidad}</span>}
+                          </div>
+                        </div>
+                        {cantidad === 0 && <span style={{ fontSize: 12, color: "#3a2a1a" }}>0</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Actividad por sector */}
+              <div>
+                <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 12 }}>Actividad por sector</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
+                  {["Sector Isla", "Sector Pantallas", "Sector Escape", "Sector DJ"].map(zona => {
+                    const cantidad = resumen.filter(r => MESAS.find(m => m.id === r.mesa_id)?.zona === zona).length;
+                    const emoji = zona === "Sector Isla" ? "🏝️" : zona === "Sector Pantallas" ? "📺" : zona === "Sector Escape" ? "🚪" : "🎧";
+                    return (
+                      <div key={zona} style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 8, padding: "14px 16px", textAlign: "center" }}>
+                        <div style={{ fontSize: 24, marginBottom: 6 }}>{emoji}</div>
+                        <div style={{ fontSize: 11, color: "#7a6a50", marginBottom: 4 }}>{zona}</div>
+                        <div style={{ fontSize: 26, fontWeight: "bold", color: "#b8914a" }}>{cantidad}</div>
+                        <div style={{ fontSize: 11, color: "#5a4a30" }}>reservas</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Ranking de garzones */}
+              <div>
+                <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 12 }}>Ranking de garzones</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {(() => {
+                    const conteo = {};
+                    resumen.forEach(r => { if (r.garzon) conteo[r.garzon] = (conteo[r.garzon] || 0) + 1; });
+                    const ranking = Object.entries(conteo).sort((a, b) => b[1] - a[1]);
+                    const maxVal = ranking[0]?.[1] || 1;
+                    if (ranking.length === 0) return <div style={{ fontSize: 13, color: "#4a3a22" }}>Sin datos de garzones aún</div>;
+                    return ranking.map(([nombre, cant], idx) => (
+                      <div key={nombre} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ width: 24, fontSize: 13, color: idx === 0 ? "#b8914a" : "#5a4a30", textAlign: "center", fontWeight: "bold" }}>{idx + 1}</div>
+                        <div style={{ width: 120, fontSize: 13, color: "#e8dcc8", flexShrink: 0 }}>{nombre}</div>
+                        <div style={{ flex: 1, height: 22, background: "#1a1508", borderRadius: 4, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${Math.round((cant / maxVal) * 100)}%`, background: idx === 0 ? "#b8914a" : "#3a2e1a", borderRadius: 4, display: "flex", alignItems: "center", paddingLeft: 8 }}>
+                            <span style={{ fontSize: 11, color: idx === 0 ? "#0f0e0c" : "#7a6a50", fontWeight: "bold" }}>{cant}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </div>
+
             </div>
           )}
         </div>
