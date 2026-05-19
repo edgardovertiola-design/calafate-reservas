@@ -527,6 +527,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   const [fechaSeleccionada, setFechaSeleccionada] = useState(today());
   const [reservaAEliminar, setReservaAEliminar] = useState(null);
   const [reservaExpandida, setReservaExpandida] = useState(null);
+  const [busqueda, setBusqueda] = useState("");
   const [textoCliente, setTextoCliente] = useState("");
   const [clientesParsed, setClientesParsed] = useState([]);
   const [alertaListaNegra, setAlertaListaNegra] = useState([]);
@@ -542,7 +543,18 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   const cargarReservas = async () => { setCargando(true); const data = await db.get("reservas", `fecha=eq.${fechaSeleccionada}&select=*&order=nombre.asc`); setReservas(data); setCargando(false); };
   const cargarListaNegra = async () => { const data = await db.get("lista_negra", "select=*"); setListaNegra(Array.isArray(data) ? data : []); };
 
-  const reservasFiltradas = useMemo(() => sesion.rol === "admin" ? reservas : reservas.filter(r => { const mesa = MESAS.find(m => m.id === r.mesa_id); return mesa?.zona === sectorSesion; }), [reservas, sesion.rol, sectorSesion]);
+  const reservasPorSector = useMemo(() => sesion.rol === "admin" ? reservas : reservas.filter(r => { const mesa = MESAS.find(m => m.id === r.mesa_id); return mesa?.zona === sectorSesion; }), [reservas, sesion.rol, sectorSesion]);
+
+  const reservasFiltradas = useMemo(() => {
+    if (!busqueda.trim()) return reservasPorSector;
+    const q = busqueda.toLowerCase().trim();
+    return reservasPorSector.filter(r => {
+      const participantes = Array.isArray(r.participantes) ? r.participantes : [];
+      const enTitular = `${r.nombre} ${r.apellido} ${r.rut}`.toLowerCase().includes(q);
+      const enParticipantes = participantes.some(p => `${p.nombre} ${p.apellido} ${p.rut}`.toLowerCase().includes(q));
+      return enTitular || enParticipantes;
+    });
+  }, [reservasPorSector, busqueda]);
   const mesasDisponibles = () => { const ocupadas = reservas.map(r => r.mesa_id); return MESAS.filter(m => !ocupadas.includes(m.id)); };
 
   const handlePasteCliente = async (texto) => {
@@ -659,17 +671,29 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
               <label style={{ color: "#7a6a50", fontSize: 12, letterSpacing: 1, textTransform: "uppercase" }}>Fecha:</label>
               <input type="date" value={fechaSeleccionada} onChange={e => setFechaSeleccionada(e.target.value)} style={{ ...inp, width: "auto" }} />
               <span style={{ background: "#2a1e0a", border: "1px solid #3a2e1a", color: "#b8914a", padding: "5px 14px", borderRadius: 20, fontSize: 13 }}>
-                {reservasFiltradas.length} reservas{sectorSesion && sesion.rol !== "admin" ? ` · ${sectorSesion}` : ""}
+                {busqueda ? `${reservasFiltradas.length} de ${reservasPorSector.length} reservas` : `${reservasFiltradas.length} reservas${sectorSesion && sesion.rol !== "admin" ? ` · ${sectorSesion}` : ""}`}
               </span>
               <button onClick={cargarReservas} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px" }}>↻ Actualizar</button>
               {sesion.rol !== "admin" && (
                 <button onClick={onCambiarSector} title="Cambiar sector" style={{ ...btn("ghost"), fontSize: 16, padding: "4px 10px", color: "#b8914a", borderColor: "#3a2e1a" }}>🏠</button>
               )}
             </div>
+            <div style={{ position: "relative", marginBottom: 16 }}>
+              <input
+                value={busqueda}
+                onChange={e => setBusqueda(e.target.value)}
+                placeholder="Buscar por nombre, apellido o RUT..."
+                style={{ ...inp, paddingLeft: 36 }}
+              />
+              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#5a4a30", fontSize: 15 }}>🔍</span>
+              {busqueda && (
+                <button onClick={() => setBusqueda("")} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#7a6a50", cursor: "pointer", fontSize: 16 }}>✕</button>
+              )}
+            </div>
             {cargando ? <Spinner /> : reservasFiltradas.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 20px", color: "#4a3a22", border: "1px dashed #2a1e0a", borderRadius: 6 }}>
                 <div style={{ fontSize: 38, marginBottom: 10 }}>📅</div>
-                <div>Sin reservas para este día{sectorSesion && sesion.rol !== "admin" ? ` en ${sectorSesion}` : ""}</div>
+                <div>{busqueda ? `Sin resultados para "${busqueda}"` : `Sin reservas para este día${sectorSesion && sesion.rol !== "admin" ? ` en ${sectorSesion}` : ""}`}</div>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
