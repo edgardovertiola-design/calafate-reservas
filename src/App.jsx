@@ -599,9 +599,12 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     if (!texto.trim()) { setClientesParsed([]); return; }
     const clientes = parsearTodosClientes(texto);
     setClientesParsed(clientes);
-    // Validar RUTs
-    const rutsInvalidos = clientes.filter(c => c.rut && !validarRut(c.rut));
-    if (rutsInvalidos.length > 0) {
+    // Validar RUTs - obligatorio y válido
+    const sinRut = clientes.filter(c => !c.rut || c.rut.trim() === "");
+    const rutsInvalidos = clientes.filter(c => c.rut && c.rut.trim() !== "" && !validarRut(c.rut));
+    if (sinRut.length > 0) {
+      setError(`⚠️ RUT obligatorio: ${sinRut.map(c => `${c.nombre} ${c.apellido}`).join(", ")} no tiene RUT.`);
+    } else if (rutsInvalidos.length > 0) {
       setError(`⚠️ RUT inválido: ${rutsInvalidos.map(c => `${c.nombre} ${c.apellido} (${c.rut})`).join(", ")}`);
     } else {
       setError("");
@@ -626,8 +629,10 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     if (!titular.nombre) return setError("No se pudo identificar el nombre del titular.");
     if (!titular.rut) return setError("No se pudo identificar el RUT del titular.");
     if (!form.mesa_id) return setError("Selecciona una mesa en el mapa.");
-    // Validar RUTs antes de guardar
-    const rutsInvalidos = clientesParsed.filter(c => c.rut && !validarRut(c.rut));
+    // Validar RUTs - obligatorio y válido
+    const sinRut = clientesParsed.filter(c => !c.rut || c.rut.trim() === "");
+    if (sinRut.length > 0) return setError(`⚠️ RUT obligatorio: ${sinRut.map(c => `${c.nombre} ${c.apellido}`).join(", ")} no tiene RUT.`);
+    const rutsInvalidos = clientesParsed.filter(c => !validarRut(c.rut));
     if (rutsInvalidos.length > 0) return setError(`⚠️ RUT inválido: ${rutsInvalidos.map(c => `${c.nombre} ${c.apellido} (${c.rut})`).join(", ")}`);
     // Verificar lista negra nuevamente al momento de confirmar
     const lnFinal = await db.get("lista_negra", "select=*");
