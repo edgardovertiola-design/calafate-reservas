@@ -129,10 +129,11 @@ function Spinner() {
 
 function parsearLinea(linea) {
   const partes = linea.trim().split(/\s+/);
-  if (partes.length < 2) return null;
-  const rutIndex = partes.findIndex(p => /[\.\-]/.test(p) || /^\d{7,8}[kK\d]$/.test(p));
+  if (partes.length < 1) return null;
+  const rutIndex = partes.findIndex(p => /[.\-]/.test(p) || /^\d{6,8}[kK\d]$/.test(p));
   if (rutIndex === -1) {
-    return { nombre: partes[0] || "", apellido: partes.slice(1, partes.length - 1).join(" ") || "", rut: partes[partes.length - 1] || "" };
+    // No hay RUT — todo es nombre y apellido
+    return { nombre: partes[0] || "", apellido: partes.slice(1).join(" ") || "", rut: "" };
   }
   return { nombre: partes[0] || "", apellido: partes.slice(1, rutIndex).join(" ") || "", rut: partes[rutIndex] };
 }
@@ -142,7 +143,8 @@ function parsearTodosClientes(texto) {
 }
 
 function normalizarRut(rut) {
-  return (rut || "").toLowerCase().trim().replace(/\./g, "").replace(/\s/g, "");
+  // Elimina puntos, espacios y guiones para comparar solo los dígitos + dv
+  return (rut || "").toLowerCase().trim().replace(/\./g, "").replace(/\s/g, "").replace(/-/g, "");
 }
 
 function normalizarTexto(s) {
