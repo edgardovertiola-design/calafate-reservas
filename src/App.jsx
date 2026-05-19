@@ -732,10 +732,9 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
       <div class="footer">Generado el ${new Date().toLocaleString("es-CL")}</div>
       </body></html>`;
 
-    const ventana = window.open("", "_blank");
-    ventana.document.write(html);
-    ventana.document.close();
-    ventana.print();
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
   };
 
   const tabs = [
@@ -786,11 +785,11 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24, flexWrap: "wrap" }}>
               <label style={{ color: "#7a6a50", fontSize: 12, letterSpacing: 1, textTransform: "uppercase" }}>Fecha:</label>
               <input type="date" value={fechaSeleccionada} onChange={e => setFechaSeleccionada(e.target.value)} style={{ ...inp, width: "auto" }} />
+              <button onClick={exportarPDF} title="Exportar PDF" style={{ background: "#7a2020", border: "none", borderRadius: 4, padding: "6px 10px", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>📄</button>
               <span style={{ background: "#2a1e0a", border: "1px solid #3a2e1a", color: "#b8914a", padding: "5px 14px", borderRadius: 20, fontSize: 13 }}>
                 {busqueda ? `${reservasFiltradas.length} de ${reservasPorSector.length} reservas` : `${reservasFiltradas.length} reservas${sectorSesion && sesion.rol !== "admin" ? ` · ${sectorSesion}` : ""}`}
               </span>
               <button onClick={cargarReservas} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px" }}>↻ Actualizar</button>
-              <button onClick={exportarPDF} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px", color: "#b8914a" }}>📄 Exportar PDF</button>
 
             </div>
             <div style={{ position: "relative", marginBottom: 16 }}>
@@ -883,6 +882,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16, flexWrap: "wrap" }}>
               <label style={{ color: "#7a6a50", fontSize: 12, letterSpacing: 1, textTransform: "uppercase" }}>Fecha:</label>
               <input type="date" value={fechaSeleccionada} onChange={e => setFechaSeleccionada(e.target.value)} style={{ ...inp, width: "auto" }} />
+              <button onClick={exportarPDF} title="Exportar PDF" style={{ background: "#7a2020", border: "none", borderRadius: 4, padding: "6px 10px", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>📄</button>
               <span style={{ background: "#2a1e0a", border: "1px solid #3a2e1a", color: "#7ecb7e", padding: "5px 14px", borderRadius: 20, fontSize: 13 }}>{mesasDisponibles().length} disponibles en total</span>
             </div>
             {/* Resumen por sector */}
