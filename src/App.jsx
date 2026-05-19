@@ -386,6 +386,7 @@ function AdminPanel() {
   useEffect(() => { if (tab === "listanegra") cargarListaNegra(); }, [tab]);
   useEffect(() => { if (tab === "intentos") cargarIntentos(); }, [tab]);
   useEffect(() => { if (tab === "log") cargarLog(); }, [tab]);
+  useEffect(() => { if (tab === "resumen") cargarResumen(fechaResumen); }, [tab, fechaResumen]);
 
   const cargarUsuarios = async () => { setCargando(true); const data = await db.get("usuarios", "select=*&order=id.asc"); setUsuarios(data); setCargando(false); };
   const cargarListaNegra = async () => { const data = await db.get("lista_negra", "select=*&order=id.desc"); setListaNegra(data); };
