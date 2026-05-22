@@ -232,6 +232,14 @@ function QRScanner({ onResult, onClose }) {
   const [linterna, setLinterna] = useState(false);
   const [estado, setEstado] = useState("Iniciando cámara...");
 
+  // Interceptar botón atrás de Android para cerrar el scanner
+  useEffect(() => {
+    window.history.pushState({ scanner: true }, "");
+    const handlePop = () => onClose();
+    window.addEventListener("popstate", handlePop);
+    return () => window.removeEventListener("popstate", handlePop);
+  }, []);
+
   useEffect(() => {
     let mounted = true;
 
@@ -949,6 +957,28 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   const [personas, setPersonas] = useState([]); // personas escaneadas por QR
 
   const flash = (t) => { setExitoMsg(t); setTimeout(() => setExitoMsg(""), 3000); };
+
+  // Interceptar botón atrás de Android para navegar dentro de la app
+  useEffect(() => {
+    const handlePop = (e) => {
+      if (scannerAbierto) {
+        setScannerAbierto(false);
+        window.history.pushState(null, "");
+        return;
+      }
+      if (vista === "formulario" || vista === "mapa" || vista === "admin") {
+        setVista("dia");
+        window.history.pushState(null, "");
+      }
+    };
+    window.addEventListener("popstate", handlePop);
+    return () => window.removeEventListener("popstate", handlePop);
+  }, [vista, scannerAbierto]);
+
+  // Agregar entrada al historial al cambiar de vista
+  useEffect(() => {
+    if (vista !== "dia") window.history.pushState({ vista }, "");
+  }, [vista]);
 
   useEffect(() => { cargarReservas(); cargarListaNegra(); }, [fechaSeleccionada]);
 
