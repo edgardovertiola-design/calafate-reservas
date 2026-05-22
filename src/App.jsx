@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 
 const SUPA_URL = "https://joqzusodfkvjthqwlepq.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpvcXp1c29kZmt2anRocXdsZXBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NDA1MjcsImV4cCI6MjA5NDIxNjUyN30.f6GrQQWGpFjVvwdbXkqi8UF6DEGm8yaPXNAzGKL1t-Q";
@@ -72,7 +72,6 @@ const MESA_POS = {
 const SECTORES = ["Sector Isla", "Sector Pantallas", "Sector Escape", "Sector DJ"];
 
 const fechaNoche = () => {
-  // Usar hora local del navegador, no UTC
   const ahora = new Date();
   const horaLocal = ahora.getHours();
   const year = ahora.getFullYear();
@@ -80,7 +79,6 @@ const fechaNoche = () => {
   const day = String(ahora.getDate()).padStart(2, "0");
   const hoy = `${year}-${month}-${day}`;
   if (horaLocal < 5) {
-    // Antes de las 5am, la noche corresponde al día anterior
     const ayer = new Date(ahora);
     ayer.setDate(ayer.getDate() - 1);
     const y = ayer.getFullYear();
@@ -132,7 +130,6 @@ function parsearLinea(linea) {
   if (partes.length < 1) return null;
   const rutIndex = partes.findIndex(p => /[.\-]/.test(p) || /^\d{6,8}[kK\d]$/.test(p));
   if (rutIndex === -1) {
-    // No hay RUT — todo es nombre y apellido
     return { nombre: partes[0] || "", apellido: partes.slice(1).join(" ") || "", rut: "" };
   }
   return { nombre: partes[0] || "", apellido: partes.slice(1, rutIndex).join(" ") || "", rut: partes[rutIndex] };
@@ -162,13 +159,12 @@ function parsearTodosClientes(texto) {
 }
 
 function normalizarRut(rut) {
-  // Elimina puntos, espacios y guiones para comparar solo los dígitos + dv
   return (rut || "").toLowerCase().trim().replace(/\./g, "").replace(/\s/g, "").replace(/-/g, "");
 }
 
 function normalizarTexto(s) {
   return (s || "").toLowerCase().trim()
-    .normalize("NFD").replace(/[̀-ͯ]/g, ""); // quita tildes
+    .normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
 
 function validarRut(rut) {
@@ -193,16 +189,187 @@ function estaEnListaNegra(cliente, listaNegra) {
     const rutCliente = normalizarRut(cliente.rut);
     const rutLn = normalizarRut(ln.rut);
     const rutCoincide = rutCliente !== "" && rutLn !== "" && rutCliente === rutLn;
-
     const nombreCliente = normalizarTexto(cliente.nombre);
     const apellidoCliente = normalizarTexto(cliente.apellido);
     const nombreLn = normalizarTexto(ln.nombre);
     const apellidoLn = normalizarTexto(ln.apellido);
     const nombreCoincide = nombreCliente !== "" && apellidoCliente !== "" &&
       nombreCliente === nombreLn && apellidoCliente === apellidoLn;
-
     return rutCoincide || nombreCoincide;
   }) || null;
+}
+
+// ── NUEVO: Parser QR cédula chilena ──────────────────────────────────────────
+function parseQRCedula(url) {
+  try {
+    const u = new URL(url.trim());
+    if (!u.hostname.includes("registrocivil")) return null;
+    const p = u.searchParams;
+    const run = p.get("RUN") || "";
+    const mrz = p.get("mrz") || "";
+    const nameRaw = p.get("name");
+    const name = nameRaw ? decodeURIComponent(nameRaw).replace(/\+/g, " ").replace(/\s+/g, " ").trim() : null;
+    if (!run || !mrz) return null;
+    let nombre = "", apellido = "";
+    if (name) {
+      const partes = name.trim().split(/\s+/);
+      nombre = partes[0] || "";
+      apellido = partes.slice(1).join(" ") || "";
+    }
+    return { run, nombre, apellido };
+  } catch { return null; }
+}
+
+// ── NUEVO: Componente QRScanner fullscreen con ZXing ─────────────────────────
+function QRScanner({ onResult, onClose }) {
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const animRef = useRef(null);
+  const procesandoRef = useRef(false);
+  const trackRef = useRef(null);
+  const [error, setError] = useState("");
+  const [escaneado, setEscaneado] = useState(false);
+  const [linterna, setLinterna] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const cargarZXing = () => new Promise((resolve, reject) => {
+      if (window.ZXing) return resolve(window.ZXing);
+      const s = document.createElement("script");
+      s.src = "https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js";
+      s.onload = () => resolve(window.ZXing);
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+
+    const iniciar = async () => {
+      try {
+        const ZXing = await cargarZXing();
+        if (!mounted) return;
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        if (!mounted) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+        trackRef.current = stream.getVideoTracks()[0];
+        const video = videoRef.current;
+        video.srcObject = stream;
+        await video.play();
+        // Intentar linterna automática
+        try {
+          await trackRef.current.applyConstraints({ advanced: [{ torch: true }] });
+          if (mounted) setLinterna(true);
+        } catch (_) {}
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        const hints = new Map();
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        const reader = new ZXing.BrowserQRCodeReader(hints);
+        const scanFrame = () => {
+          if (!mounted || procesandoRef.current) return;
+          if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+            try {
+              const result = reader.decodeFromCanvas(canvas);
+              if (result && !procesandoRef.current) {
+                procesandoRef.current = true;
+                const data = parseQRCedula(result.getText());
+                if (data) {
+                  setEscaneado(true);
+                  detener();
+                  setTimeout(() => { if (mounted) onResult(data); }, 150);
+                  return;
+                } else {
+                  procesandoRef.current = false;
+                }
+              }
+            } catch (_) {}
+          }
+          animRef.current = requestAnimationFrame(scanFrame);
+        };
+        animRef.current = requestAnimationFrame(scanFrame);
+      } catch (e) {
+        if (mounted) setError("No se pudo acceder a la cámara. Verifica los permisos del navegador.");
+      }
+    };
+
+    const detener = () => {
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    };
+
+    iniciar();
+    return () => { mounted = false; detener(); };
+  }, []);
+
+  const toggleLinterna = async () => {
+    if (!trackRef.current) return;
+    try {
+      await trackRef.current.applyConstraints({ advanced: [{ torch: !linterna }] });
+      setLinterna(l => !l);
+    } catch (_) {}
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "#000", display: "flex", flexDirection: "column", zIndex: 200 }}>
+      <video ref={videoRef} playsInline muted style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
+        {/* Top bar */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", background: "linear-gradient(to bottom, rgba(0,0,0,0.75), transparent)" }}>
+          <div>
+            <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase" }}>Escanear Cédula</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", marginTop: 2 }}>Apunta el QR al marco dorado</div>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={toggleLinterna} style={{ background: linterna ? "#b8914a" : "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, color: linterna ? "#0f0e0c" : "#fff", fontSize: 20, padding: "8px 12px", cursor: "pointer" }}>🔦</button>
+            <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, color: "#fff", fontSize: 18, padding: "8px 12px", cursor: "pointer" }}>✕</button>
+          </div>
+        </div>
+        {/* Marco central */}
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {escaneado ? (
+            <div style={{ background: "rgba(10,40,10,0.9)", border: "2px solid #7ecb7e", borderRadius: 16, padding: "32px 40px", textAlign: "center" }}>
+              <div style={{ fontSize: 48, marginBottom: 10 }}>✅</div>
+              <div style={{ fontSize: 15, color: "#7ecb7e", fontFamily: "'Georgia', serif" }}>¡Cédula detectada!</div>
+            </div>
+          ) : error ? (
+            <div style={{ background: "rgba(40,10,10,0.9)", border: "2px solid #cb7e7e", borderRadius: 16, padding: "24px 32px", textAlign: "center", maxWidth: 300 }}>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>📷</div>
+              <div style={{ fontSize: 13, color: "#cb7e7e", fontFamily: "'Georgia', serif" }}>{error}</div>
+              <button onClick={onClose} style={{ ...btn("ghost"), marginTop: 16, fontSize: 13 }}>Cerrar</button>
+            </div>
+          ) : (
+            <div style={{ position: "relative", width: 260, height: 260 }}>
+              <div style={{ position: "absolute", inset: 0, border: "2px solid rgba(255,255,255,0.15)", borderRadius: 12 }} />
+              {[["0","0","tl"],["0","auto","tr"],["auto","0","bl"],["auto","auto","br"]].map(([t,r,k]) => (
+                <div key={k} style={{
+                  position: "absolute",
+                  top: t === "0" ? 0 : "auto", bottom: t === "auto" ? 0 : "auto",
+                  left: r === "0" ? 0 : "auto", right: r === "auto" ? 0 : "auto",
+                  width: 28, height: 28,
+                  borderTop: (k==="tl"||k==="tr") ? "3px solid #b8914a" : "none",
+                  borderBottom: (k==="bl"||k==="br") ? "3px solid #b8914a" : "none",
+                  borderLeft: (k==="tl"||k==="bl") ? "3px solid #b8914a" : "none",
+                  borderRight: (k==="tr"||k==="br") ? "3px solid #b8914a" : "none",
+                  borderRadius: k==="tl"?"8px 0 0 0":k==="tr"?"0 8px 0 0":k==="bl"?"0 0 0 8px":"0 0 8px 0",
+                }} />
+              ))}
+            </div>
+          )}
+        </div>
+        {/* Bottom hint */}
+        <div style={{ padding: "20px", background: "linear-gradient(to top, rgba(0,0,0,0.75), transparent)", textAlign: "center" }}>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
+            {linterna ? "💡 Linterna encendida" : "Toca 🔦 si hay poca luz"}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function FloorMap({ reservas, fecha, onMesaClick, mesaSeleccionada, soloZona }) {
@@ -397,12 +564,9 @@ function AdminPanel() {
     const partes = fechaStr.split("-");
     const d = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]));
     d.setDate(d.getDate() + dias);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
+    const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, "0"); const dd = String(d.getDate()).padStart(2, "0");
     return `${y}-${m}-${dd}`;
   };
-
   const cargarResumen = async (desde) => {
     setCargandoResumen(true);
     const hasta = sumarDias(desde, 6);
@@ -410,7 +574,6 @@ function AdminPanel() {
     setResumen(Array.isArray(data) ? data : []);
     setCargandoResumen(false);
   };
-
   const guardar = async () => {
     if (!form.nombre.trim()) return setError("El nombre es obligatorio.");
     if (!form.usuario.trim()) return setError("El usuario es obligatorio.");
@@ -419,10 +582,8 @@ function AdminPanel() {
     else { await db.post("usuarios", { nombre: form.nombre.trim(), usuario: form.usuario.trim(), password: form.password.trim(), activo: true }); flash("Garzón creado."); }
     setForm({ nombre: "", usuario: "", password: "" }); setEditando(null); setError(""); cargarUsuarios();
   };
-
   const toggleActivo = async (u) => { await db.patch("usuarios", u.id, { activo: !u.activo }); cargarUsuarios(); };
   const eliminar = async (u) => { await db.delete("usuarios", u.id); setConfirmarEliminar(null); flash("Usuario eliminado."); cargarUsuarios(); };
-
   const guardarAdmin = async () => {
     if (!adminForm.usuario.trim()) return setAdminError("El usuario es obligatorio.");
     if (!adminForm.password.trim()) return setAdminError("La contraseña es obligatoria.");
@@ -434,7 +595,6 @@ function AdminPanel() {
       setAdminForm({ usuario: "", password: "", confirmar: "" }); setAdminError(""); flash("Credenciales actualizadas.");
     } catch { setAdminError("Error al guardar. Verifica que la tabla admin_config exista en Supabase."); }
   };
-
   const agregarListaNegra = async () => {
     if (!lnForm.nombre.trim()) return setLnError("El nombre es obligatorio.");
     if (!lnForm.apellido.trim()) return setLnError("El apellido es obligatorio.");
@@ -442,9 +602,7 @@ function AdminPanel() {
     await db.post("lista_negra", { nombre: lnForm.nombre.trim(), apellido: lnForm.apellido.trim(), rut: lnForm.rut.trim(), motivo: lnForm.motivo.trim() });
     setLnForm({ nombre: "", apellido: "", rut: "", motivo: "" }); setLnError(""); flash("Persona agregada a lista negra."); cargarListaNegra();
   };
-
   const eliminarListaNegra = async (ln) => { await db.delete("lista_negra", ln.id); setConfirmarEliminarLn(null); flash("Persona removida de lista negra."); cargarListaNegra(); };
-
   const tabStyle = (t) => ({ background: "none", border: "none", borderBottom: tab === t ? "2px solid #b8914a" : "2px solid transparent", color: tab === t ? "#f5e6c8" : "#7a6a50", padding: "8px 14px", cursor: "pointer", fontFamily: "'Georgia', serif", fontSize: 13 });
   const intentosNuevos = intentos.filter(i => !i.visto).length;
 
@@ -545,9 +703,7 @@ function AdminPanel() {
                       {!i.visto && <span style={{ background: "#7a2020", color: "#fca5a5", fontSize: 10, padding: "2px 8px", borderRadius: 10 }}>NUEVO</span>}
                       <span style={{ fontSize: 15, color: "#f5e6c8" }}>{i.cliente_nombre} {i.cliente_apellido}</span>
                     </div>
-                    <div style={{ fontSize: 12, color: "#7a6a50" }}>
-                      🪪 {i.cliente_rut} &nbsp;·&nbsp; 👤 Garzón: {i.garzon_nombre} &nbsp;·&nbsp; Mesa {i.mesa_id} &nbsp;·&nbsp; {new Date(i.fecha_intento).toLocaleString("es-CL")}
-                    </div>
+                    <div style={{ fontSize: 12, color: "#7a6a50" }}>🪪 {i.cliente_rut} &nbsp;·&nbsp; 👤 Garzón: {i.garzon_nombre} &nbsp;·&nbsp; Mesa {i.mesa_id} &nbsp;·&nbsp; {new Date(i.fecha_intento).toLocaleString("es-CL")}</div>
                     {i.fecha_reserva && <div style={{ fontSize: 12, color: "#9a5050", marginTop: 2 }}>📅 Intentó reservar para: {i.fecha_reserva}</div>}
                   </div>
                   {!i.visto && <button onClick={() => marcarVisto(i.id)} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px" }}>Marcar visto</button>}
@@ -567,17 +723,13 @@ function AdminPanel() {
           </div>
           {cargandoResumen ? <Spinner /> : (
             <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-
-              {/* Reservas por noche */}
               <div>
                 <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 12 }}>Reservas por noche</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {Array.from({ length: 7 }, (_, i) => {
                     const fecha = sumarDias(fechaResumen, i);
                     const cantidad = resumen.filter(r => r.fecha === fecha).length;
-                    const max = Math.max(...Array.from({ length: 7 }, (_, j) => {
-                      return resumen.filter(r => r.fecha === sumarDias(fechaResumen, j)).length;
-                    }), 1);
+                    const max = Math.max(...Array.from({ length: 7 }, (_, j) => resumen.filter(r => r.fecha === sumarDias(fechaResumen, j)).length), 1);
                     const pct = Math.round((cantidad / max) * 100);
                     const partes = fecha.split("-");
                     const dLabel = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]));
@@ -596,8 +748,6 @@ function AdminPanel() {
                   })}
                 </div>
               </div>
-
-              {/* Actividad por sector */}
               <div>
                 <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 12 }}>Actividad por sector</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
@@ -615,8 +765,6 @@ function AdminPanel() {
                   })}
                 </div>
               </div>
-
-              {/* Ranking de garzones */}
               <div>
                 <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 12 }}>Ranking de garzones</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -640,7 +788,6 @@ function AdminPanel() {
                   })()}
                 </div>
               </div>
-
             </div>
           )}
         </div>
@@ -701,7 +848,6 @@ function AdminPanel() {
           </div>
         </div>
       )}
-
       {confirmarEliminarLn && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
           <div style={{ background: "#15120a", border: "1px solid #3a2e1a", borderRadius: 8, padding: 32, maxWidth: 380, width: "100%", textAlign: "center" }}>
@@ -734,6 +880,8 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   const [form, setForm] = useState({ fecha: today(), mesa_id: "", nota: "Reserva" });
   const [error, setError] = useState("");
   const [exitoMsg, setExitoMsg] = useState("");
+  // NUEVO: estado scanner
+  const [scannerAbierto, setScannerAbierto] = useState(false);
 
   const flash = (t) => { setExitoMsg(t); setTimeout(() => setExitoMsg(""), 3000); };
 
@@ -754,7 +902,17 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
       return enTitular || enParticipantes;
     });
   }, [reservasPorSector, busqueda]);
+
   const mesasDisponibles = () => { const ocupadas = reservas.map(r => r.mesa_id); return MESAS.filter(m => !ocupadas.includes(m.id)); };
+
+  // NUEVO: cuando el scanner detecta una cédula, agrega la línea al textarea
+  const onScanResult = (data) => {
+    setScannerAbierto(false);
+    const lineaNueva = [data.nombre, data.apellido, data.run].filter(Boolean).join(" ");
+    const textoActual = textoCliente.trim();
+    const textoNuevo = textoActual ? `${textoActual}\n${lineaNueva}` : lineaNueva;
+    handlePasteCliente(textoNuevo);
+  };
 
   const handlePasteCliente = async (texto) => {
     setTextoCliente(texto);
@@ -762,12 +920,10 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     if (!texto.trim()) { setClientesParsed([]); return; }
     const clientes = parsearTodosClientes(texto);
     setClientesParsed(clientes);
-    // Validar máximo de personas
     if (clientes.length > 5) {
       setError(`⚠️ Máximo 5 personas por mesa. Tienes ${clientes.length}.`);
       return;
     }
-    // Validar RUTs - obligatorio y válido
     const sinRut = clientes.filter(c => !c.rut || c.rut.trim() === "");
     const rutsInvalidos = clientes.filter(c => c.rut && c.rut.trim() !== "" && !validarRut(c.rut));
     if (sinRut.length > 0) {
@@ -777,7 +933,6 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     } else {
       setError("");
     }
-    // Cargar lista negra fresca desde Supabase en cada verificación
     const lnFresh = await db.get("lista_negra", "select=*");
     const lnArray = Array.isArray(lnFresh) ? lnFresh : [];
     setListaNegra(lnArray);
@@ -797,21 +952,16 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     if (!titular.nombre) return setError("No se pudo identificar el nombre del titular.");
     if (!titular.rut) return setError("No se pudo identificar el RUT del titular.");
     if (!form.mesa_id) return setError("Selecciona una mesa en el mapa.");
-    // Validar máximo de personas
     if (clientesParsed.length > 5) return setError(`⚠️ Máximo 5 personas por mesa. Tienes ${clientesParsed.length}.`);
-    // Validar RUTs - obligatorio y válido
     const sinRut = clientesParsed.filter(c => !c.rut || c.rut.trim() === "");
     if (sinRut.length > 0) return setError(`⚠️ RUT obligatorio: ${sinRut.map(c => `${c.nombre} ${c.apellido}`).join(", ")} no tiene RUT.`);
     const rutsInvalidos = clientesParsed.filter(c => !validarRut(c.rut));
     if (rutsInvalidos.length > 0) return setError(`⚠️ RUT inválido: ${rutsInvalidos.map(c => `${c.nombre} ${c.apellido} (${c.rut})`).join(", ")}`);
-    // Verificar lista negra nuevamente al momento de confirmar
     const lnFinal = await db.get("lista_negra", "select=*");
     const lnFinalArray = Array.isArray(lnFinal) ? lnFinal : [];
     const bloqueadosFinal = clientesParsed.map(c => ({ cliente: c, match: estaEnListaNegra(c, lnFinalArray) })).filter(x => x.match);
     if (bloqueadosFinal.length > 0) setAlertaListaNegra(bloqueadosFinal);
-
     if (bloqueadosFinal.length > 0) {
-      // Registrar intento bloqueado
       for (const x of bloqueadosFinal) {
         await db.post("intentos_bloqueados", {
           cliente_nombre: x.cliente.nombre, cliente_apellido: x.cliente.apellido,
@@ -825,7 +975,6 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     if (parseInt(form.personas) > mesa.capacidad) return setError(`Mesa ${mesa.id}: máximo ${mesa.capacidad} personas.`);
     const yaReservada = reservas.some(r => r.mesa_id === parseInt(form.mesa_id) && r.fecha === form.fecha);
     if (yaReservada) return setError(`La mesa ${form.mesa_id} ya tiene una reserva para esa noche.`);
-
     await db.post("reservas", {
       nombre: titular.nombre, apellido: titular.apellido, rut: titular.rut,
       fecha: form.fecha, hora: "23:30", personas: clientesParsed.length,
@@ -836,7 +985,6 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     const fechaReserva = form.fecha;
     setTextoCliente(""); setClientesParsed([]); setAlertaListaNegra([]);
     setForm({ fecha: today(), mesa_id: "", nota: "Reserva" });
-    // Cargar reservas directamente antes de cambiar de vista
     setCargando(true);
     const dataFresh = await db.get("reservas", `fecha=eq.${fechaReserva}&select=*&order=nombre.asc`);
     setReservas(dataFresh);
@@ -848,9 +996,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   };
 
   const registrarLog = async (accion, detalle) => {
-    try {
-      await db.post("log_actividad", { accion, garzon: sesion.nombre, detalle });
-    } catch {}
+    try { await db.post("log_actividad", { accion, garzon: sesion.nombre, detalle }); } catch {}
   };
 
   const cancelarReserva = async () => {
@@ -870,48 +1016,11 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
       const participantesHtml = participantes.length > 0
         ? `<div style="margin-top:4px;padding-left:12px;font-size:11px;color:#555">${participantes.map((p, i) => `${i + 2}. ${p.nombre} ${p.apellido} — ${p.rut}`).join("<br/>")}</div>`
         : "";
-      return `
-        <tr>
-          <td style="padding:8px;border-bottom:1px solid #ddd;font-weight:bold">${r.mesa_id}</td>
-          <td style="padding:8px;border-bottom:1px solid #ddd">${mesa?.zona || ""}</td>
-          <td style="padding:8px;border-bottom:1px solid #ddd">
-            <strong>${r.nombre} ${r.apellido}</strong><br/>
-            <span style="font-size:11px;color:#666">${r.rut}</span>
-            ${participantesHtml}
-          </td>
-          <td style="padding:8px;border-bottom:1px solid #ddd;text-align:center">${r.personas}</td>
-          <td style="padding:8px;border-bottom:1px solid #ddd;font-size:11px;color:#666">${r.nota || ""}</td>
-          <td style="padding:8px;border-bottom:1px solid #ddd;font-size:11px;color:#666">${r.garzon || ""}</td>
-        </tr>`;
+      return `<tr><td style="padding:8px;border-bottom:1px solid #ddd;font-weight:bold">${r.mesa_id}</td><td style="padding:8px;border-bottom:1px solid #ddd">${mesa?.zona || ""}</td><td style="padding:8px;border-bottom:1px solid #ddd"><strong>${r.nombre} ${r.apellido}</strong><br/><span style="font-size:11px;color:#666">${r.rut}</span>${participantesHtml}</td><td style="padding:8px;border-bottom:1px solid #ddd;text-align:center">${r.personas}</td><td style="padding:8px;border-bottom:1px solid #ddd;font-size:11px;color:#666">${r.nota || ""}</td><td style="padding:8px;border-bottom:1px solid #ddd;font-size:11px;color:#666">${r.garzon || ""}</td></tr>`;
     }).join("");
-
-    const html = `
-      <html><head><meta charset="utf-8">
-      <title>Reservas Calafate ${fechaSeleccionada}</title>
-      <style>
-        body { font-family: Georgia, serif; padding: 30px; color: #222; }
-        h1 { font-size: 22px; margin-bottom: 4px; }
-        h2 { font-size: 14px; font-weight: normal; color: #666; margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; }
-        th { background: #1a1208; color: #f5e6c8; padding: 10px 8px; text-align: left; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
-        tr:nth-child(even) { background: #f9f6f0; }
-        .footer { margin-top: 20px; font-size: 11px; color: #999; }
-      </style>
-      </head><body>
-      <h1>🎶 Calafate Discoteca</h1>
-      <h2>Reservas del ${fecha}${sectorSesion && sesion.rol !== "admin" ? ` · ${sectorSesion}` : ""} — ${reservasFiltradas.length} reservas</h2>
-      <table>
-        <thead><tr>
-          <th>Mesa</th><th>Sector</th><th>Titular / Participantes</th><th>Pers.</th><th>Nota</th><th>Garzón</th>
-        </tr></thead>
-        <tbody>${filas}</tbody>
-      </table>
-      <div class="footer">Generado el ${new Date().toLocaleString("es-CL")}</div>
-      </body></html>`;
-
+    const html = `<html><head><meta charset="utf-8"><title>Reservas Calafate ${fechaSeleccionada}</title><style>body{font-family:Georgia,serif;padding:30px;color:#222}h1{font-size:22px;margin-bottom:4px}h2{font-size:14px;font-weight:normal;color:#666;margin-bottom:20px}table{width:100%;border-collapse:collapse}th{background:#1a1208;color:#f5e6c8;padding:10px 8px;text-align:left;font-size:12px;letter-spacing:1px;text-transform:uppercase}tr:nth-child(even){background:#f9f6f0}.footer{margin-top:20px;font-size:11px;color:#999}</style></head><body><h1>🎶 Calafate Discoteca</h1><h2>Reservas del ${fecha}${sectorSesion && sesion.rol !== "admin" ? ` · ${sectorSesion}` : ""} — ${reservasFiltradas.length} reservas</h2><table><thead><tr><th>Mesa</th><th>Sector</th><th>Titular / Participantes</th><th>Pers.</th><th>Nota</th><th>Garzón</th></tr></thead><tbody>${filas}</tbody></table><div class="footer">Generado el ${new Date().toLocaleString("es-CL")}</div></body></html>`;
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank");
+    window.open(URL.createObjectURL(blob), "_blank");
   };
 
   const tabs = [
@@ -967,19 +1076,11 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                 {busqueda ? `${reservasFiltradas.length} de ${reservasPorSector.length} reservas` : `${reservasFiltradas.length} reservas${sectorSesion && sesion.rol !== "admin" ? ` · ${sectorSesion}` : ""}`}
               </span>
               <button onClick={cargarReservas} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px" }}>↻ Actualizar</button>
-
             </div>
             <div style={{ position: "relative", marginBottom: 16 }}>
-              <input
-                value={busqueda}
-                onChange={e => setBusqueda(e.target.value)}
-                placeholder="Buscar por nombre, apellido o RUT..."
-                style={{ ...inp, paddingLeft: 36 }}
-              />
+              <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar por nombre, apellido o RUT..." style={{ ...inp, paddingLeft: 36 }} />
               <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#5a4a30", fontSize: 15 }}>🔍</span>
-              {busqueda && (
-                <button onClick={() => setBusqueda("")} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#7a6a50", cursor: "pointer", fontSize: 16 }}>✕</button>
-              )}
+              {busqueda && <button onClick={() => setBusqueda("")} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#7a6a50", cursor: "pointer", fontSize: 16 }}>✕</button>}
             </div>
             {cargando ? <Spinner /> : reservasFiltradas.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 20px", color: "#4a3a22", border: "1px dashed #2a1e0a", borderRadius: 6 }}>
@@ -1006,11 +1107,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                           <div>
                             <div style={{ fontSize: 15, color: "#f5e6c8", marginBottom: 3 }}>
                               {r.nombre} {r.apellido}
-                              {participantes.length > 0 && (
-                                <span style={{ marginLeft: 8, fontSize: 11, color: "#b8914a", background: "#2a1e0a", padding: "2px 8px", borderRadius: 10 }}>
-                                  +{participantes.length} participante{participantes.length > 1 ? "s" : ""}
-                                </span>
-                              )}
+                              {participantes.length > 0 && <span style={{ marginLeft: 8, fontSize: 11, color: "#b8914a", background: "#2a1e0a", padding: "2px 8px", borderRadius: 10 }}>+{participantes.length} participante{participantes.length > 1 ? "s" : ""}</span>}
                             </div>
                             <div style={{ fontSize: 12, color: "#7a6a50" }}>
                               🪪 {r.rut} &nbsp;·&nbsp; 👥 {r.personas} pers. &nbsp;·&nbsp;
@@ -1025,7 +1122,6 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                           <button onClick={e => { e.stopPropagation(); setReservaAEliminar(r); }} style={{ ...btn("ghost"), fontSize: 12, padding: "6px 14px", color: "#9a5050", borderColor: "#4a2020" }}>Cancelar reserva</button>
                         </div>
                       </div>
-
                       {expandida && (
                         <div style={{ borderTop: "1px solid #2a2010", padding: "12px 18px", background: "#0f0c06" }}>
                           <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 10 }}>Lista de participantes</div>
@@ -1062,7 +1158,6 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
               <button onClick={exportarPDF} title="Exportar PDF" style={{ background: "#7a2020", border: "none", borderRadius: 4, padding: "6px 10px", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>📄</button>
               <span style={{ background: "#2a1e0a", border: "1px solid #3a2e1a", color: "#7ecb7e", padding: "5px 14px", borderRadius: 20, fontSize: 13 }}>{mesasDisponibles().length} disponibles en total</span>
             </div>
-            {/* Resumen por sector */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 20 }}>
               {SECTORES.map(zona => {
                 const totalZona = MESAS.filter(m => m.zona === zona).length;
@@ -1094,7 +1189,16 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
             <h2 style={{ fontSize: 20, fontWeight: "normal", color: "#f5e6c8", marginBottom: 24, letterSpacing: 1 }}>Nueva Reserva</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 6, padding: 16 }}>
-                <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#b8914a", marginBottom: 8 }}>Pegar lista de participantes</label>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <label style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#b8914a" }}>Pegar lista de participantes</label>
+                  {/* NUEVO: botón escanear cédula */}
+                  <button
+                    onClick={() => setScannerAbierto(true)}
+                    style={{ background: "#2a1e0a", border: "1px solid #b8914a", borderRadius: 5, color: "#b8914a", fontSize: 12, padding: "5px 12px", cursor: "pointer", fontFamily: "'Georgia', serif", display: "flex", alignItems: "center", gap: 6 }}
+                  >
+                    📷 Escanear cédula
+                  </button>
+                </div>
                 <textarea
                   value={textoCliente}
                   onChange={e => handlePasteCliente(e.target.value)}
@@ -1146,19 +1250,8 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
               <Field label="Motivo">
                 <div style={{ display: "flex", gap: 10 }}>
                   {["Cumpleaños", "Reserva", "Evento especial"].map(opcion => (
-                    <button
-                      key={opcion}
-                      onClick={() => setForm(p => ({ ...p, nota: opcion }))}
-                      style={{
-                        flex: 1, padding: "9px 6px", borderRadius: 3, cursor: "pointer",
-                        fontFamily: "'Georgia', serif", fontSize: 13,
-                        background: form.nota === opcion ? "#b8914a" : "#1a1508",
-                        color: form.nota === opcion ? "#0f0e0c" : "#7a6a50",
-                        border: form.nota === opcion ? "1px solid #b8914a" : "1px solid #2a2010",
-                        fontWeight: form.nota === opcion ? "bold" : "normal",
-                        transition: "all 0.15s",
-                      }}
-                    >
+                    <button key={opcion} onClick={() => setForm(p => ({ ...p, nota: opcion }))}
+                      style={{ flex: 1, padding: "9px 6px", borderRadius: 3, cursor: "pointer", fontFamily: "'Georgia', serif", fontSize: 13, background: form.nota === opcion ? "#b8914a" : "#1a1508", color: form.nota === opcion ? "#0f0e0c" : "#7a6a50", border: form.nota === opcion ? "1px solid #b8914a" : "1px solid #2a2010", fontWeight: form.nota === opcion ? "bold" : "normal", transition: "all 0.15s" }}>
                       {opcion}
                     </button>
                   ))}
@@ -1178,6 +1271,11 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
         {vista === "admin" && sesion.rol === "admin" && <AdminPanel />}
       </div>
 
+      {/* NUEVO: Modal scanner */}
+      {scannerAbierto && (
+        <QRScanner onResult={onScanResult} onClose={() => setScannerAbierto(false)} />
+      )}
+
       {reservaAEliminar && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
           <div style={{ background: "#15120a", border: "1px solid #3a2e1a", borderRadius: 8, padding: 32, maxWidth: 400, width: "100%", textAlign: "center" }}>
@@ -1195,7 +1293,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   );
 }
 
-const TIMEOUT_MS = 15 * 60 * 1000; // 15 minutos
+const TIMEOUT_MS = 15 * 60 * 1000;
 
 export default function Root() {
   const [sesion, setSesion] = useState(() => {
@@ -1206,30 +1304,21 @@ export default function Root() {
   });
 
   const handleLogout = () => {
-    setSesion(null);
-    setSector(null);
+    setSesion(null); setSector(null);
     try { localStorage.removeItem("calafate_sesion"); localStorage.removeItem("calafate_sector"); } catch {}
   };
 
-  // Timeout de inactividad
   useEffect(() => {
     if (!sesion) return;
     let timer = setTimeout(handleLogout, TIMEOUT_MS);
-    const resetTimer = () => {
-      clearTimeout(timer);
-      timer = setTimeout(handleLogout, TIMEOUT_MS);
-    };
+    const resetTimer = () => { clearTimeout(timer); timer = setTimeout(handleLogout, TIMEOUT_MS); };
     const eventos = ["click", "keydown", "mousemove", "touchstart", "scroll"];
     eventos.forEach(e => window.addEventListener(e, resetTimer));
-    return () => {
-      clearTimeout(timer);
-      eventos.forEach(e => window.removeEventListener(e, resetTimer));
-    };
+    return () => { clearTimeout(timer); eventos.forEach(e => window.removeEventListener(e, resetTimer)); };
   }, [sesion]);
 
   const handleLogin = (usuario) => {
-    setSesion(usuario);
-    setSector(null);
+    setSesion(usuario); setSector(null);
     try { localStorage.setItem("calafate_sesion", JSON.stringify(usuario)); localStorage.removeItem("calafate_sector"); } catch {}
   };
 
