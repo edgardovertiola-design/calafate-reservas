@@ -380,6 +380,62 @@ function QRScanner({ onResult, onClose }) {
   );
 }
 
+
+// ── NUEVO: Tarjeta editable por persona escaneada ────────────────────────────
+function TarjetaPersona({ persona, idx, onEditar, onEliminar }) {
+  const [editando, setEditando] = useState(false);
+  const [nombre, setNombre] = useState(persona.nombre || "");
+  const [apellido, setApellido] = useState(persona.apellido || "");
+
+  const confirmar = () => {
+    onEditar(idx, nombre.trim(), apellido.trim());
+    setEditando(false);
+  };
+
+  const sinNombre = !persona.nombre && !persona.apellido;
+
+  return (
+    <div style={{
+      background: "#0f0c06",
+      border: `1px solid ${idx === 0 ? "#b8914a" : "#2a2010"}`,
+      borderLeft: `3px solid ${idx === 0 ? "#b8914a" : "#3a2e1a"}`,
+      borderRadius: 6, padding: "10px 14px",
+    }}>
+      {editando ? (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Nombre"
+            style={{ ...inp, flex: 1, minWidth: 80, padding: "6px 10px", fontSize: 13 }} />
+          <input value={apellido} onChange={e => setApellido(e.target.value)} placeholder="Apellido"
+            style={{ ...inp, flex: 1, minWidth: 80, padding: "6px 10px", fontSize: 13 }} />
+          <button onClick={confirmar} style={{ ...btn("gold"), padding: "6px 14px", fontSize: 12 }}>✓</button>
+          <button onClick={() => setEditando(false)} style={{ ...btn("ghost"), padding: "6px 10px", fontSize: 12 }}>✕</button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 10, background: idx === 0 ? "#b8914a" : "#2a2010", color: idx === 0 ? "#0f0e0c" : "#7a6a50", padding: "2px 7px", borderRadius: 10, fontWeight: "bold", flexShrink: 0 }}>
+              {idx === 0 ? "TITULAR" : `${idx + 1}`}
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 14, color: sinNombre ? "#5a4a30" : "#f5e6c8", fontStyle: sinNombre ? "italic" : "normal" }}>
+                {sinNombre ? "Sin nombre" : `${persona.nombre} ${persona.apellido}`.trim()}
+                {sinNombre && <span style={{ marginLeft: 8, fontSize: 11, color: "#b8914a" }}>⚠ Toca ✏ para completar</span>}
+              </div>
+              <div style={{ fontSize: 11, color: "#7a6a50", marginTop: 2, fontFamily: "monospace" }}>🪪 {persona.rut}</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+            <button onClick={() => { setNombre(persona.nombre || ""); setApellido(persona.apellido || ""); setEditando(true); }}
+              style={{ background: "none", border: "1px solid #3a2e1a", borderRadius: 4, color: "#7a6a50", fontSize: 13, padding: "4px 9px", cursor: "pointer" }}>✏</button>
+            <button onClick={() => onEliminar(idx)}
+              style={{ background: "none", border: "1px solid #4a2020", borderRadius: 4, color: "#9a5050", fontSize: 13, padding: "4px 9px", cursor: "pointer" }}>✕</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FloorMap({ reservas, fecha, onMesaClick, mesaSeleccionada, soloZona }) {
   const ocupadas = reservas.filter(r => r.fecha === fecha).map(r => r.mesa_id);
   const [tooltip, setTooltip] = useState(null);
@@ -888,8 +944,9 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   const [form, setForm] = useState({ fecha: today(), mesa_id: "", nota: "Reserva" });
   const [error, setError] = useState("");
   const [exitoMsg, setExitoMsg] = useState("");
-  // NUEVO: estado scanner
+  // NUEVO: estado scanner y personas escaneadas
   const [scannerAbierto, setScannerAbierto] = useState(false);
+  const [personas, setPersonas] = useState([]); // personas escaneadas por QR
 
   const flash = (t) => { setExitoMsg(t); setTimeout(() => setExitoMsg(""), 3000); };
 
@@ -913,13 +970,21 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
 
   const mesasDisponibles = () => { const ocupadas = reservas.map(r => r.mesa_id); return MESAS.filter(m => !ocupadas.includes(m.id)); };
 
-  // NUEVO: cuando el scanner detecta una cédula, agrega la línea al textarea
+  // NUEVO: cuando el scanner detecta una cédula, agrega tarjeta a lista
   const onScanResult = (data) => {
     setScannerAbierto(false);
-    const lineaNueva = [data.nombre, data.apellido, data.run].filter(Boolean).join(" ");
-    const textoActual = textoCliente.trim();
-    const textoNuevo = textoActual ? `${textoActual}\n${lineaNueva}` : lineaNueva;
-    handlePasteCliente(textoNuevo);
+    // Verificar duplicado
+    if (personas.some(p => p.rut.replace(/[^\dk]/gi, "") === data.run.replace(/[^\dk]/gi, ""))) return;
+    if (personas.length >= 5) return;
+    setPersonas(prev => [...prev, { nombre: data.nombre || "", apellido: data.apellido || "", rut: data.run }]);
+  };
+
+  const editarPersona = (idx, nombre, apellido) => {
+    setPersonas(prev => prev.map((p, i) => i === idx ? { ...p, nombre, apellido } : p));
+  };
+
+  const eliminarPersona = (idx) => {
+    setPersonas(prev => prev.filter((_, i) => i !== idx));
   };
 
   const handlePasteCliente = async (texto) => {
@@ -955,19 +1020,21 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   };
 
   const handleSubmit = async () => {
-    if (clientesParsed.length === 0) return setError("Pega los datos del cliente en el cuadro de texto.");
-    const titular = clientesParsed[0];
-    if (!titular.nombre) return setError("No se pudo identificar el nombre del titular.");
+    // Usar personas escaneadas si existen, sino clientesParsed del textarea
+    const listaFinal = personas.length > 0 ? personas : clientesParsed;
+    if (listaFinal.length === 0) return setError("Escanea al menos una cédula o pega la lista de participantes.");
+    const titular = listaFinal[0];
+    if (!titular.nombre) return setError("No se pudo identificar el nombre del titular. Edita la tarjeta con ✏");
     if (!titular.rut) return setError("No se pudo identificar el RUT del titular.");
     if (!form.mesa_id) return setError("Selecciona una mesa en el mapa.");
-    if (clientesParsed.length > 5) return setError(`⚠️ Máximo 5 personas por mesa. Tienes ${clientesParsed.length}.`);
-    const sinRut = clientesParsed.filter(c => !c.rut || c.rut.trim() === "");
+    if (listaFinal.length > 5) return setError(`⚠️ Máximo 5 personas por mesa. Tienes ${listaFinal.length}.`);
+    const sinRut = listaFinal.filter(c => !c.rut || c.rut.trim() === "");
     if (sinRut.length > 0) return setError(`⚠️ RUT obligatorio: ${sinRut.map(c => `${c.nombre} ${c.apellido}`).join(", ")} no tiene RUT.`);
-    const rutsInvalidos = clientesParsed.filter(c => !validarRut(c.rut));
+    const rutsInvalidos = listaFinal.filter(c => !validarRut(c.rut));
     if (rutsInvalidos.length > 0) return setError(`⚠️ RUT inválido: ${rutsInvalidos.map(c => `${c.nombre} ${c.apellido} (${c.rut})`).join(", ")}`);
     const lnFinal = await db.get("lista_negra", "select=*");
     const lnFinalArray = Array.isArray(lnFinal) ? lnFinal : [];
-    const bloqueadosFinal = clientesParsed.map(c => ({ cliente: c, match: estaEnListaNegra(c, lnFinalArray) })).filter(x => x.match);
+    const bloqueadosFinal = listaFinal.map(c => ({ cliente: c, match: estaEnListaNegra(c, lnFinalArray) })).filter(x => x.match);
     if (bloqueadosFinal.length > 0) setAlertaListaNegra(bloqueadosFinal);
     if (bloqueadosFinal.length > 0) {
       for (const x of bloqueadosFinal) {
@@ -985,13 +1052,13 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     if (yaReservada) return setError(`La mesa ${form.mesa_id} ya tiene una reserva para esa noche.`);
     await db.post("reservas", {
       nombre: titular.nombre, apellido: titular.apellido, rut: titular.rut,
-      fecha: form.fecha, hora: "23:30", personas: clientesParsed.length,
+      fecha: form.fecha, hora: "23:30", personas: listaFinal.length,
       mesa_id: parseInt(form.mesa_id), nota: form.nota.trim(),
-      participantes: clientesParsed.slice(1),
+      participantes: listaFinal.slice(1),
       garzon: sesion.nombre,
     });
     const fechaReserva = form.fecha;
-    setTextoCliente(""); setClientesParsed([]); setAlertaListaNegra([]);
+    setTextoCliente(""); setClientesParsed([]); setPersonas([]); setAlertaListaNegra([]);
     setForm({ fecha: today(), mesa_id: "", nota: "Reserva" });
     setCargando(true);
     const dataFresh = await db.get("reservas", `fecha=eq.${fechaReserva}&select=*&order=nombre.asc`);
@@ -999,7 +1066,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     setCargando(false);
     setFechaSeleccionada(fechaReserva);
     setVista("dia");
-    await registrarLog("RESERVA", `Mesa ${form.mesa_id} — ${titular.nombre} ${titular.apellido} (${titular.rut}), ${clientesParsed.length} persona(s)`);
+    await registrarLog("RESERVA", `Mesa ${form.mesa_id} — ${titular.nombre} ${titular.apellido} (${titular.rut}), ${listaFinal.length} persona(s)`);
     flash("¡Reserva creada correctamente!");
   };
 
@@ -1197,36 +1264,76 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
             <h2 style={{ fontSize: 20, fontWeight: "normal", color: "#f5e6c8", marginBottom: 24, letterSpacing: 1 }}>Nueva Reserva</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 6, padding: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <label style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#b8914a" }}>Pegar lista de participantes</label>
-                  {/* NUEVO: botón escanear cédula */}
-                  <button
-                    onClick={() => setScannerAbierto(true)}
-                    style={{ background: "#2a1e0a", border: "1px solid #b8914a", borderRadius: 5, color: "#b8914a", fontSize: 12, padding: "5px 12px", cursor: "pointer", fontFamily: "'Georgia', serif", display: "flex", alignItems: "center", gap: 6 }}
-                  >
-                    📷 Escanear cédula
-                  </button>
-                </div>
-                <textarea
-                  value={textoCliente}
-                  onChange={e => handlePasteCliente(e.target.value)}
-                  placeholder={"Juan García 12.345.678-9\nMaría López 9.876.543-2\nPedro Soto 11.222.333-4"}
-                  rows={4}
-                  style={{ ...inp, resize: "vertical", fontFamily: "monospace", fontSize: 13 }}
-                />
-                <div style={{ fontSize: 11, color: "#5a4a30", marginTop: 6 }}>Primera línea = titular. Las siguientes son participantes adicionales.</div>
 
-                {clientesParsed.length > 0 && alertaListaNegra.length === 0 && (
-                  <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 4 }}>
-                    {clientesParsed.map((c, idx) => (
-                      <div key={idx} style={{ fontSize: 12, color: "#7ecb7e", display: "flex", gap: 8 }}>
-                        <span style={{ color: idx === 0 ? "#b8914a" : "#5a4a30" }}>{idx === 0 ? "★" : `${idx + 1}.`}</span>
-                        {c.nombre} {c.apellido} — {c.rut}
-                      </div>
+                {/* ── Tabs: Escanear / Pegar texto ── */}
+                <div style={{ display: "flex", borderBottom: "1px solid #2a2010", marginBottom: 14, gap: 0 }}>
+                  {[["qr","📷 Escanear cédula"],["texto","📋 Pegar lista"]].map(([modo, label]) => {
+                    const modoActivo = personas.length > 0 ? "qr" : textoCliente ? "texto" : (content => content)(null);
+                    return (
+                      <button key={modo}
+                        style={{ background: "none", border: "none", borderBottom: "2px solid transparent", color: "#7a6a50", padding: "6px 14px", cursor: "pointer", fontFamily: "'Georgia', serif", fontSize: 13 }}
+                        onClick={() => modo === "qr" ? setScannerAbierto(true) : null}
+                      >{label}</button>
+                    );
+                  })}
+                  <span style={{ marginLeft: "auto", fontSize: 11, color: "#5a4a30", alignSelf: "center", paddingRight: 4 }}>
+                    {personas.length > 0 ? `${personas.length}/5 escaneadas` : `${clientesParsed.length}/5 detectadas`}
+                  </span>
+                </div>
+
+                {/* ── Modo QR: lista de tarjetas ── */}
+                {personas.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                    {personas.map((p, idx) => (
+                      <TarjetaPersona key={idx} persona={p} idx={idx} onEditar={editarPersona} onEliminar={eliminarPersona} />
                     ))}
+                    {personas.length < 5 && (
+                      <button onClick={() => setScannerAbierto(true)}
+                        style={{ background: "none", border: "1px dashed #3a2e1a", borderRadius: 6, color: "#7a6a50", padding: "9px", fontSize: 13, cursor: "pointer", fontFamily: "'Georgia', serif" }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = "#b8914a"; e.currentTarget.style.color = "#b8914a"; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = "#3a2e1a"; e.currentTarget.style.color = "#7a6a50"; }}>
+                        📷 Escanear siguiente cédula
+                      </button>
+                    )}
+                    <button onClick={() => setPersonas([])}
+                      style={{ background: "none", border: "none", color: "#5a4a30", fontSize: 11, cursor: "pointer", fontFamily: "'Georgia', serif", textAlign: "left", padding: "2px 0" }}>
+                      ↩ Limpiar y usar texto en su lugar
+                    </button>
                   </div>
                 )}
 
+                {/* ── Modo texto: textarea original ── */}
+                {personas.length === 0 && (
+                  <>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <label style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#b8914a" }}>Pegar lista de participantes</label>
+                      <button onClick={() => setScannerAbierto(true)}
+                        style={{ background: "#2a1e0a", border: "1px solid #b8914a", borderRadius: 5, color: "#b8914a", fontSize: 12, padding: "5px 12px", cursor: "pointer", fontFamily: "'Georgia', serif" }}>
+                        📷 Escanear cédula
+                      </button>
+                    </div>
+                    <textarea
+                      value={textoCliente}
+                      onChange={e => handlePasteCliente(e.target.value)}
+                      placeholder={"Juan García 12.345.678-9\nMaría López 9.876.543-2\nPedro Soto 11.222.333-4"}
+                      rows={4}
+                      style={{ ...inp, resize: "vertical", fontFamily: "monospace", fontSize: 13 }}
+                    />
+                    <div style={{ fontSize: 11, color: "#5a4a30", marginTop: 6 }}>Primera línea = titular. Las siguientes son participantes adicionales.</div>
+                    {clientesParsed.length > 0 && alertaListaNegra.length === 0 && (
+                      <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 4 }}>
+                        {clientesParsed.map((c, idx) => (
+                          <div key={idx} style={{ fontSize: 12, color: "#7ecb7e", display: "flex", gap: 8 }}>
+                            <span style={{ color: idx === 0 ? "#b8914a" : "#5a4a30" }}>{idx === 0 ? "★" : `${idx + 1}.`}</span>
+                            {c.nombre} {c.apellido} — {c.rut}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Alerta lista negra */}
                 {alertaListaNegra.length > 0 && (
                   <div style={{ marginTop: 12, background: "#2a0808", border: "1px solid #7a1a1a", borderRadius: 4, padding: "12px 14px" }}>
                     <div style={{ fontSize: 13, color: "#f87171", fontWeight: "bold", marginBottom: 6 }}>🚫 Cliente(s) en lista negra — reserva bloqueada</div>
@@ -1240,12 +1347,15 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
               </div>
 
               <Field label="Fecha"><input type="date" name="fecha" value={form.fecha} onChange={handleFormChange} style={inp} /></Field>
-              {clientesParsed.length > 0 && (
-                <div style={{ background: "#15120a", border: `1px solid ${clientesParsed.length > 5 ? "#7a2020" : "#3a5a1a"}`, borderRadius: 4, padding: "10px 14px", fontSize: 13, color: clientesParsed.length > 5 ? "#f87171" : "#7ecb7e" }}>
-                  👥 {clientesParsed.length} persona{clientesParsed.length > 1 ? "s" : ""} detectada{clientesParsed.length > 1 ? "s" : ""}
-                  {clientesParsed.length > 5 && <span style={{ marginLeft: 8, fontWeight: "bold" }}>— máximo 5</span>}
-                </div>
-              )}
+              {(personas.length > 0 || clientesParsed.length > 0) && (() => {
+                const total = personas.length > 0 ? personas.length : clientesParsed.length;
+                return (
+                  <div style={{ background: "#15120a", border: `1px solid ${total > 5 ? "#7a2020" : "#3a5a1a"}`, borderRadius: 4, padding: "10px 14px", fontSize: 13, color: total > 5 ? "#f87171" : "#7ecb7e" }}>
+                    👥 {total} persona{total > 1 ? "s" : ""} {personas.length > 0 ? "escaneada" : "detectada"}{total > 1 ? "s" : ""}
+                    {total > 5 && <span style={{ marginLeft: 8, fontWeight: "bold" }}>— máximo 5</span>}
+                  </div>
+                );
+              })()}
               <div>
                 <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 8 }}>Seleccionar Mesa — haz clic en el mapa</label>
                 <FloorMap reservas={reservas} fecha={form.fecha} mesaSeleccionada={form.mesa_id ? parseInt(form.mesa_id) : null} onMesaClick={(id) => { setForm(p => ({ ...p, mesa_id: String(id) })); setError(""); }} soloZona={sesion.rol !== "admin" ? sectorSesion : null} />
@@ -1267,7 +1377,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
               </Field>
               {error && <div style={{ background: "#2a1010", border: "1px solid #5a2020", color: "#cb7e7e", padding: "10px 14px", borderRadius: 4, fontSize: 13 }}>{error}</div>}
               <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
-                <button onClick={handleSubmit} disabled={alertaListaNegra.length > 0} style={{ ...btn("gold"), flex: 1, padding: "12px", fontSize: 15, opacity: alertaListaNegra.length > 0 ? 0.4 : 1, cursor: alertaListaNegra.length > 0 ? "not-allowed" : "pointer" }}>
+                <button onClick={handleSubmit} disabled={alertaListaNegra.length > 0 || (personas.length === 0 && clientesParsed.length === 0)} style={{ ...btn("gold"), flex: 1, padding: "12px", fontSize: 15, opacity: (alertaListaNegra.length > 0 || (personas.length === 0 && clientesParsed.length === 0)) ? 0.4 : 1, cursor: (alertaListaNegra.length > 0 || (personas.length === 0 && clientesParsed.length === 0)) ? "not-allowed" : "pointer" }}>
                   Confirmar Reserva
                 </button>
                 <button onClick={() => { setVista("dia"); setError(""); }} style={{ ...btn("ghost"), padding: "12px 20px" }}>Cancelar</button>
