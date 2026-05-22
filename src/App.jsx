@@ -135,9 +135,10 @@ function parseQR(raw) {
 
 // ── COMPONENTE SCANNER QR ────────────────────────────────────────────────────
 function QRScanner({ onResult, onClose }) {
-  const readerRef = useRef(null);
   const scannerRef = useRef(null);
+  const procesandoRef = useRef(false); // evita doble disparo
   const [error, setError] = useState("");
+  const [escaneado, setEscaneado] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -152,13 +153,23 @@ function QRScanner({ onResult, onClose }) {
         await scanner.start(
           { facingMode: "environment" },
           { fps: 10, qrbox: { width: 250, height: 250 } },
-          (decoded) => {
-            if (!mounted) return;
+          async (decoded) => {
+            // Evitar procesamiento múltiple
+            if (!mounted || procesandoRef.current) return;
             const data = parseQR(decoded);
-            if (data) {
-              scanner.stop().catch(() => {});
-              onResult(data);
-            }
+            if (!data) return;
+            procesandoRef.current = true;
+            setEscaneado(true);
+            // Detener cámara limpiamente antes de notificar
+            try {
+              await scanner.stop();
+              await scanner.clear();
+            } catch (_) {}
+            scannerRef.current = null;
+            // Pequeño delay para que React limpie el DOM del scanner
+            setTimeout(() => {
+              if (mounted) onResult(data);
+            }, 100);
           },
           () => {}
         );
@@ -171,6 +182,7 @@ function QRScanner({ onResult, onClose }) {
       mounted = false;
       if (scannerRef.current) {
         scannerRef.current.stop().catch(() => {});
+        scannerRef.current = null;
       }
     };
   }, []);
@@ -189,13 +201,19 @@ function QRScanner({ onResult, onClose }) {
           <div style={{ background: "#2a1010", border: "1px solid #5a2020", color: "#cb7e7e", padding: "14px", borderRadius: 6, fontSize: 13, textAlign: "center" }}>
             {error}
           </div>
+        ) : escaneado ? (
+          <div style={{ background: "#0a2010", border: "1px solid #2a6a2a", borderRadius: 8, padding: "32px 20px", textAlign: "center" }}>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>✅</div>
+            <div style={{ fontSize: 14, color: "#7ecb7e" }}>¡Cédula detectada!</div>
+            <div style={{ fontSize: 12, color: "#5a4a30", marginTop: 6 }}>Procesando...</div>
+          </div>
         ) : (
           <div style={{ background: "#000", borderRadius: 8, overflow: "hidden" }}>
             <div id="qr-reader-cedula" style={{ width: "100%" }} />
           </div>
         )}
         <div style={{ marginTop: 14, fontSize: 12, color: "#5a4a30", textAlign: "center" }}>
-          El QR se detecta automáticamente al enfocarlo
+          {escaneado ? "Cerrando cámara..." : "El QR se detecta automáticamente al enfocarlo"}
         </div>
       </div>
     </div>
