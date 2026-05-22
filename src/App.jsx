@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 
 const SUPA_URL = "https://joqzusodfkvjthqwlepq.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpvcXp1c29kZmt2anRocXdsZXBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NDA1MjcsImV4cCI6MjA5NDIxNjUyN30.f6GrQQWGpFjVvwdbXkqi8UF6DEGm8yaPXNAzGKL1t-Q";
@@ -72,6 +72,7 @@ const MESA_POS = {
 const SECTORES = ["Sector Isla", "Sector Pantallas", "Sector Escape", "Sector DJ"];
 
 const fechaNoche = () => {
+  // Usar hora local del navegador, no UTC
   const ahora = new Date();
   const horaLocal = ahora.getHours();
   const year = ahora.getFullYear();
@@ -79,6 +80,7 @@ const fechaNoche = () => {
   const day = String(ahora.getDate()).padStart(2, "0");
   const hoy = `${year}-${month}-${day}`;
   if (horaLocal < 5) {
+    // Antes de las 5am, la noche corresponde al día anterior
     const ayer = new Date(ahora);
     ayer.setDate(ayer.getDate() - 1);
     const y = ayer.getFullYear();
@@ -107,280 +109,6 @@ const btn = (v = "gold") => ({
   fontWeight: v === "gold" ? "bold" : "normal",
 });
 
-// ── QR PARSER ────────────────────────────────────────────────────────────────
-function parseQR(raw) {
-  try {
-    const url = new URL(raw.trim());
-    if (!url.hostname.includes("registrocivil")) return null;
-    const p = url.searchParams;
-    const run = p.get("RUN") || "";
-    const serial = p.get("serial") || "";
-    const mrz = p.get("mrz") || "";
-    const nameRaw = p.get("name");
-    const name = nameRaw
-      ? decodeURIComponent(nameRaw).replace(/\+/g, " ").replace(/\s+/g, " ").trim()
-      : null;
-    if (!run || !mrz) return null;
-    const isOld = name !== null || /^[A-Za-z]/.test(serial);
-    // Parsear nombre y apellido
-    let nombre = "", apellido = "";
-    if (name) {
-      const partes = name.trim().split(/\s+/);
-      nombre = partes[0] || "";
-      apellido = partes.slice(1).join(" ") || "";
-    }
-    return { run, nombre, apellido, isOld };
-  } catch (e) { return null; }
-}
-
-// ── COMPONENTE SCANNER QR (ZXing nativo) ─────────────────────────────────────
-function QRScanner({ onResult, onClose }) {
-  const videoRef = useRef(null);
-  const streamRef = useRef(null);
-  const animRef = useRef(null);
-  const procesandoRef = useRef(false);
-  const [error, setError] = useState("");
-  const [escaneado, setEscaneado] = useState(false);
-  const [linterna, setLinterna] = useState(false);
-  const [trackRef] = useState({ current: null });
-
-  useEffect(() => {
-    let mounted = true;
-
-    const cargarZXing = () => new Promise((resolve, reject) => {
-      if (window.ZXing) return resolve(window.ZXing);
-      const s = document.createElement("script");
-      s.src = "https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js";
-      s.onload = () => resolve(window.ZXing);
-      s.onerror = reject;
-      document.head.appendChild(s);
-    });
-
-    const iniciar = async () => {
-      try {
-        const ZXing = await cargarZXing();
-        if (!mounted) return;
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "environment",
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          }
-        });
-        if (!mounted) { stream.getTracks().forEach(t => t.stop()); return; }
-
-        streamRef.current = stream;
-        const track = stream.getVideoTracks()[0];
-        trackRef.current = track;
-
-        const video = videoRef.current;
-        video.srcObject = stream;
-        await video.play();
-
-        // Intentar encender linterna automáticamente en poca luz
-        try {
-          await track.applyConstraints({ advanced: [{ torch: true }] });
-          setLinterna(true);
-        } catch (_) {}
-
-        // Canvas para decodificar frames
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        const hints = new Map();
-        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-        const reader = new ZXing.BrowserQRCodeReader(hints);
-
-        const scanFrame = () => {
-          if (!mounted || procesandoRef.current) return;
-          if (video.readyState === video.HAVE_ENOUGH_DATA) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0);
-            try {
-              const result = reader.decodeFromCanvas(canvas);
-              if (result && !procesandoRef.current) {
-                procesandoRef.current = true;
-                const data = parseQR(result.getText());
-                if (data) {
-                  setEscaneado(true);
-                  detener();
-                  setTimeout(() => { if (mounted) onResult(data); }, 150);
-                  return;
-                } else {
-                  procesandoRef.current = false;
-                }
-              }
-            } catch (_) {}
-          }
-          animRef.current = requestAnimationFrame(scanFrame);
-        };
-        animRef.current = requestAnimationFrame(scanFrame);
-
-      } catch (e) {
-        if (mounted) setError("No se pudo acceder a la cámara. Verifica los permisos del navegador.");
-      }
-    };
-
-    const detener = () => {
-      if (animRef.current) cancelAnimationFrame(animRef.current);
-      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    };
-
-    iniciar();
-    return () => { mounted = false; detener(); };
-  }, []);
-
-  const toggleLinterna = async () => {
-    const track = trackRef.current;
-    if (!track) return;
-    try {
-      await track.applyConstraints({ advanced: [{ torch: !linterna }] });
-      setLinterna(l => !l);
-    } catch (_) {}
-  };
-
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "#000", display: "flex", flexDirection: "column", zIndex: 200 }}>
-      {/* Video fullscreen */}
-      <video ref={videoRef} playsInline muted style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
-
-      {/* Overlay con marco de enfoque */}
-      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
-        {/* Top bar */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", background: "linear-gradient(to bottom, rgba(0,0,0,0.7), transparent)", zIndex: 10 }}>
-          <div>
-            <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase" }}>Escanear Cédula</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>Apunta el QR al centro del marco</div>
-          </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={toggleLinterna} title="Linterna" style={{ background: linterna ? "#b8914a" : "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, color: linterna ? "#0f0e0c" : "#fff", fontSize: 20, padding: "8px 12px", cursor: "pointer" }}>
-              🔦
-            </button>
-            <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, color: "#fff", fontSize: 18, padding: "8px 12px", cursor: "pointer" }}>✕</button>
-          </div>
-        </div>
-
-        {/* Marco de escaneo centrado */}
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          {escaneado ? (
-            <div style={{ background: "rgba(10,40,10,0.9)", border: "2px solid #7ecb7e", borderRadius: 16, padding: "32px 40px", textAlign: "center" }}>
-              <div style={{ fontSize: 48, marginBottom: 10 }}>✅</div>
-              <div style={{ fontSize: 15, color: "#7ecb7e", fontFamily: "'Georgia', serif" }}>¡Cédula detectada!</div>
-            </div>
-          ) : error ? (
-            <div style={{ background: "rgba(40,10,10,0.9)", border: "2px solid #cb7e7e", borderRadius: 16, padding: "24px 32px", textAlign: "center", maxWidth: 300 }}>
-              <div style={{ fontSize: 32, marginBottom: 10 }}>📷</div>
-              <div style={{ fontSize: 13, color: "#cb7e7e", fontFamily: "'Georgia', serif" }}>{error}</div>
-            </div>
-          ) : (
-            <div style={{ position: "relative", width: 260, height: 260 }}>
-              {/* Marco con esquinas */}
-              <div style={{ position: "absolute", inset: 0, border: "2px solid rgba(255,255,255,0.2)", borderRadius: 12 }} />
-              {[["0","0","tl"],["0","auto","tr"],["auto","0","bl"],["auto","auto","br"]].map(([t,r,k]) => (
-                <div key={k} style={{
-                  position: "absolute",
-                  top: t === "0" ? 0 : "auto", bottom: t === "auto" ? 0 : "auto",
-                  left: r === "0" ? 0 : "auto", right: r === "auto" ? 0 : "auto",
-                  width: 28, height: 28,
-                  borderTop: (k==="tl"||k==="tr") ? "3px solid #b8914a" : "none",
-                  borderBottom: (k==="bl"||k==="br") ? "3px solid #b8914a" : "none",
-                  borderLeft: (k==="tl"||k==="bl") ? "3px solid #b8914a" : "none",
-                  borderRight: (k==="tr"||k==="br") ? "3px solid #b8914a" : "none",
-                  borderRadius: k==="tl"?"8px 0 0 0":k==="tr"?"0 8px 0 0":k==="bl"?"0 0 0 8px":"0 0 8px 0",
-                }} />
-              ))}
-              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", textAlign: "center", letterSpacing: 1 }}>QR aquí</div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Bottom hint */}
-        <div style={{ padding: "20px", background: "linear-gradient(to top, rgba(0,0,0,0.7), transparent)", textAlign: "center" }}>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>
-            {linterna ? "💡 Linterna encendida" : "Toca 🔦 si hay poca luz"}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── PANEL DE PERSONAS ESCANEADAS ─────────────────────────────────────────────
-function PanelPersonas({ personas, onAgregarManual, onEliminar, onEditarNombre, maxPersonas }) {
-  const [editando, setEditando] = useState(null);
-  const [nombreEdit, setNombreEdit] = useState("");
-  const [apellidoEdit, setApellidoEdit] = useState("");
-
-  const iniciarEdicion = (idx) => {
-    setEditando(idx);
-    setNombreEdit(personas[idx].nombre);
-    setApellidoEdit(personas[idx].apellido);
-  };
-
-  const confirmarEdicion = () => {
-    onEditarNombre(editando, nombreEdit.trim(), apellidoEdit.trim());
-    setEditando(null);
-  };
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {personas.map((p, idx) => (
-        <div key={idx} style={{
-          background: "#0f0c06",
-          border: `1px solid ${idx === 0 ? "#b8914a" : "#2a2010"}`,
-          borderLeft: `3px solid ${idx === 0 ? "#b8914a" : "#3a2e1a"}`,
-          borderRadius: 6, padding: "10px 14px",
-        }}>
-          {editando === idx ? (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              <input value={nombreEdit} onChange={e => setNombreEdit(e.target.value)} placeholder="Nombre" style={{ ...inp, flex: 1, minWidth: 80, padding: "6px 10px", fontSize: 13 }} />
-              <input value={apellidoEdit} onChange={e => setApellidoEdit(e.target.value)} placeholder="Apellido" style={{ ...inp, flex: 1, minWidth: 80, padding: "6px 10px", fontSize: 13 }} />
-              <button onClick={confirmarEdicion} style={{ ...btn("gold"), padding: "6px 14px", fontSize: 12 }}>✓</button>
-              <button onClick={() => setEditando(null)} style={{ ...btn("ghost"), padding: "6px 10px", fontSize: 12 }}>✕</button>
-            </div>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-                <span style={{ fontSize: 10, background: idx === 0 ? "#b8914a" : "#2a2010", color: idx === 0 ? "#0f0e0c" : "#7a6a50", padding: "2px 7px", borderRadius: 10, fontWeight: "bold", flexShrink: 0 }}>
-                  {idx === 0 ? "TITULAR" : `${idx + 1}`}
-                </span>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 14, color: p.nombre ? "#f5e6c8" : "#5a4a30", fontStyle: p.nombre ? "normal" : "italic" }}>
-                    {p.nombre || p.apellido ? `${p.nombre} ${p.apellido}`.trim() : "Sin nombre"}
-                    {!p.nombre && (
-                      <span style={{ marginLeft: 6, fontSize: 11, color: "#b8914a" }}>⚠ Completar nombre</span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 11, color: "#7a6a50", marginTop: 2, fontFamily: "monospace" }}>🪪 {p.rut}</div>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                <button onClick={() => iniciarEdicion(idx)} title="Editar nombre" style={{ background: "none", border: "1px solid #3a2e1a", borderRadius: 4, color: "#7a6a50", fontSize: 12, padding: "4px 8px", cursor: "pointer" }}>✏</button>
-                <button onClick={() => onEliminar(idx)} title="Eliminar" style={{ background: "none", border: "1px solid #4a2020", borderRadius: 4, color: "#9a5050", fontSize: 12, padding: "4px 8px", cursor: "pointer" }}>✕</button>
-              </div>
-            </div>
-          )}
-        </div>
-      ))}
-
-      {personas.length < maxPersonas && (
-        <button
-          onClick={onAgregarManual}
-          style={{ background: "none", border: "1px dashed #3a2e1a", borderRadius: 6, color: "#7a6a50", padding: "10px", fontSize: 13, cursor: "pointer", fontFamily: "'Georgia', serif", transition: "all 0.15s" }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = "#b8914a"; e.currentTarget.style.color = "#b8914a"; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = "#3a2e1a"; e.currentTarget.style.color = "#7a6a50"; }}
-        >
-          + Agregar persona manualmente
-        </button>
-      )}
-    </div>
-  );
-}
-
 function Field({ label, children }) {
   return (
     <div>
@@ -399,12 +127,48 @@ function Spinner() {
   );
 }
 
+function parsearLinea(linea) {
+  const partes = linea.trim().split(/\s+/);
+  if (partes.length < 1) return null;
+  const rutIndex = partes.findIndex(p => /[.\-]/.test(p) || /^\d{6,8}[kK\d]$/.test(p));
+  if (rutIndex === -1) {
+    // No hay RUT — todo es nombre y apellido
+    return { nombre: partes[0] || "", apellido: partes.slice(1).join(" ") || "", rut: "" };
+  }
+  return { nombre: partes[0] || "", apellido: partes.slice(1, rutIndex).join(" ") || "", rut: partes[rutIndex] };
+}
+
+function tieneRut(linea) {
+  const partes = linea.trim().split(/\s+/);
+  return partes.some(p => /[.\-]/.test(p) || /^\d{6,8}[kK\d]$/.test(p));
+}
+
+function parsearTodosClientes(texto) {
+  const lineas = texto.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+  const combinadas = [];
+  let i = 0;
+  while (i < lineas.length) {
+    const lineaActual = lineas[i];
+    const siguienteLinea = lineas[i + 1];
+    if (!tieneRut(lineaActual) && siguienteLinea && tieneRut(siguienteLinea)) {
+      combinadas.push(`${lineaActual} ${siguienteLinea}`);
+      i += 2;
+    } else {
+      combinadas.push(lineaActual);
+      i++;
+    }
+  }
+  return combinadas.map(parsearLinea).filter(Boolean);
+}
+
 function normalizarRut(rut) {
+  // Elimina puntos, espacios y guiones para comparar solo los dígitos + dv
   return (rut || "").toLowerCase().trim().replace(/\./g, "").replace(/\s/g, "").replace(/-/g, "");
 }
 
 function normalizarTexto(s) {
-  return (s || "").toLowerCase().trim().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  return (s || "").toLowerCase().trim()
+    .normalize("NFD").replace(/[̀-ͯ]/g, ""); // quita tildes
 }
 
 function validarRut(rut) {
@@ -412,7 +176,8 @@ function validarRut(rut) {
   const rutLimpio = rut.toLowerCase().trim().replace(/\./g, "").replace(/\s/g, "");
   if (!/^\d{7,8}-[\dk]$/.test(rutLimpio)) return false;
   const [numero, dv] = rutLimpio.split("-");
-  let suma = 0, multiplo = 2;
+  let suma = 0;
+  let multiplo = 2;
   for (let i = numero.length - 1; i >= 0; i--) {
     suma += parseInt(numero[i]) * multiplo;
     multiplo = multiplo === 7 ? 2 : multiplo + 1;
@@ -425,24 +190,25 @@ function validarRut(rut) {
 function estaEnListaNegra(cliente, listaNegra) {
   if (!Array.isArray(listaNegra)) return null;
   return listaNegra.find(ln => {
-    const rutCoincide = normalizarRut(cliente.rut) !== "" && normalizarRut(ln.rut) !== "" && normalizarRut(cliente.rut) === normalizarRut(ln.rut);
-    const nombreCoincide = normalizarTexto(cliente.nombre) !== "" && normalizarTexto(cliente.apellido) !== "" &&
-      normalizarTexto(cliente.nombre) === normalizarTexto(ln.nombre) && normalizarTexto(cliente.apellido) === normalizarTexto(ln.apellido);
+    const rutCliente = normalizarRut(cliente.rut);
+    const rutLn = normalizarRut(ln.rut);
+    const rutCoincide = rutCliente !== "" && rutLn !== "" && rutCliente === rutLn;
+
+    const nombreCliente = normalizarTexto(cliente.nombre);
+    const apellidoCliente = normalizarTexto(cliente.apellido);
+    const nombreLn = normalizarTexto(ln.nombre);
+    const apellidoLn = normalizarTexto(ln.apellido);
+    const nombreCoincide = nombreCliente !== "" && apellidoCliente !== "" &&
+      nombreCliente === nombreLn && apellidoCliente === apellidoLn;
+
     return rutCoincide || nombreCoincide;
   }) || null;
-}
-
-function parsearLinea(linea) {
-  const partes = linea.trim().split(/\s+/);
-  if (partes.length < 1) return null;
-  const rutIndex = partes.findIndex(p => /[.\-]/.test(p) || /^\d{6,8}[kK\d]$/.test(p));
-  if (rutIndex === -1) return { nombre: partes[0] || "", apellido: partes.slice(1).join(" ") || "", rut: "" };
-  return { nombre: partes[0] || "", apellido: partes.slice(1, rutIndex).join(" ") || "", rut: partes[rutIndex] };
 }
 
 function FloorMap({ reservas, fecha, onMesaClick, mesaSeleccionada, soloZona }) {
   const ocupadas = reservas.filter(r => r.fecha === fecha).map(r => r.mesa_id);
   const [tooltip, setTooltip] = useState(null);
+
   return (
     <div style={{ width: "100%", position: "relative" }}>
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 14 }}>
@@ -615,6 +381,7 @@ function AdminPanel() {
   });
 
   const flash = (t) => { setMsg(t); setTimeout(() => setMsg(""), 3000); };
+
   useEffect(() => { cargarUsuarios(); }, []);
   useEffect(() => { if (tab === "listanegra") cargarListaNegra(); }, [tab]);
   useEffect(() => { if (tab === "intentos") cargarIntentos(); }, [tab]);
@@ -630,8 +397,12 @@ function AdminPanel() {
     const partes = fechaStr.split("-");
     const d = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]));
     d.setDate(d.getDate() + dias);
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${dd}`;
   };
+
   const cargarResumen = async (desde) => {
     setCargandoResumen(true);
     const hasta = sumarDias(desde, 6);
@@ -661,7 +432,7 @@ function AdminPanel() {
       if (existing && existing.length > 0) await db.patch("admin_config", existing[0].id, { usuario: adminForm.usuario.trim(), password: adminForm.password.trim() });
       else await db.post("admin_config", { usuario: adminForm.usuario.trim(), password: adminForm.password.trim() });
       setAdminForm({ usuario: "", password: "", confirmar: "" }); setAdminError(""); flash("Credenciales actualizadas.");
-    } catch { setAdminError("Error al guardar."); }
+    } catch { setAdminError("Error al guardar. Verifica que la tabla admin_config exista en Supabase."); }
   };
 
   const agregarListaNegra = async () => {
@@ -672,10 +443,10 @@ function AdminPanel() {
     setLnForm({ nombre: "", apellido: "", rut: "", motivo: "" }); setLnError(""); flash("Persona agregada a lista negra."); cargarListaNegra();
   };
 
-  const eliminarListaNegra = async (ln) => { await db.delete("lista_negra", ln.id); setConfirmarEliminarLn(null); flash("Persona removida."); cargarListaNegra(); };
+  const eliminarListaNegra = async (ln) => { await db.delete("lista_negra", ln.id); setConfirmarEliminarLn(null); flash("Persona removida de lista negra."); cargarListaNegra(); };
+
   const tabStyle = (t) => ({ background: "none", border: "none", borderBottom: tab === t ? "2px solid #b8914a" : "2px solid transparent", color: tab === t ? "#f5e6c8" : "#7a6a50", padding: "8px 14px", cursor: "pointer", fontFamily: "'Georgia', serif", fontSize: 13 });
   const intentosNuevos = intentos.filter(i => !i.visto).length;
-  const sumarDiasLocal = sumarDias;
 
   return (
     <div>
@@ -762,7 +533,8 @@ function AdminPanel() {
         <div>
           {cargandoIntentos ? <Spinner /> : intentos.length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 20px", color: "#4a3a22", border: "1px dashed #2a1e0a", borderRadius: 6 }}>
-              <div style={{ fontSize: 38, marginBottom: 10 }}>🛡️</div><div>Sin intentos bloqueados registrados</div>
+              <div style={{ fontSize: 38, marginBottom: 10 }}>🛡️</div>
+              <div>Sin intentos bloqueados registrados</div>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -773,7 +545,10 @@ function AdminPanel() {
                       {!i.visto && <span style={{ background: "#7a2020", color: "#fca5a5", fontSize: 10, padding: "2px 8px", borderRadius: 10 }}>NUEVO</span>}
                       <span style={{ fontSize: 15, color: "#f5e6c8" }}>{i.cliente_nombre} {i.cliente_apellido}</span>
                     </div>
-                    <div style={{ fontSize: 12, color: "#7a6a50" }}>🪪 {i.cliente_rut} &nbsp;·&nbsp; 👤 {i.garzon_nombre} &nbsp;·&nbsp; Mesa {i.mesa_id} &nbsp;·&nbsp; {new Date(i.fecha_intento).toLocaleString("es-CL")}</div>
+                    <div style={{ fontSize: 12, color: "#7a6a50" }}>
+                      🪪 {i.cliente_rut} &nbsp;·&nbsp; 👤 Garzón: {i.garzon_nombre} &nbsp;·&nbsp; Mesa {i.mesa_id} &nbsp;·&nbsp; {new Date(i.fecha_intento).toLocaleString("es-CL")}
+                    </div>
+                    {i.fecha_reserva && <div style={{ fontSize: 12, color: "#9a5050", marginTop: 2 }}>📅 Intentó reservar para: {i.fecha_reserva}</div>}
                   </div>
                   {!i.visto && <button onClick={() => marcarVisto(i.id)} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px" }}>Marcar visto</button>}
                 </div>
@@ -788,36 +563,45 @@ function AdminPanel() {
           <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24, flexWrap: "wrap" }}>
             <label style={{ color: "#7a6a50", fontSize: 12, letterSpacing: 1, textTransform: "uppercase" }}>Desde:</label>
             <input type="date" value={fechaResumen} onChange={e => setFechaResumen(e.target.value)} style={{ ...inp, width: "auto" }} />
-            <span style={{ fontSize: 12, color: "#5a4a30" }}>— 7 días</span>
+            <span style={{ fontSize: 12, color: "#5a4a30" }}>— mostrando 7 días</span>
           </div>
           {cargandoResumen ? <Spinner /> : (
             <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+              {/* Reservas por noche */}
               <div>
                 <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 12 }}>Reservas por noche</div>
-                {Array.from({ length: 7 }, (_, i) => {
-                  const fecha = sumarDiasLocal(fechaResumen, i);
-                  const cantidad = resumen.filter(r => r.fecha === fecha).length;
-                  const max = Math.max(...Array.from({ length: 7 }, (_, j) => resumen.filter(r => r.fecha === sumarDiasLocal(fechaResumen, j)).length), 1);
-                  const partes = fecha.split("-");
-                  const dLabel = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]));
-                  const label = dLabel.toLocaleDateString("es-CL", { weekday: "short", day: "numeric", month: "short" });
-                  return (
-                    <div key={fecha} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-                      <div style={{ width: 90, fontSize: 12, color: "#7a6a50", textAlign: "right", flexShrink: 0 }}>{label}</div>
-                      <div style={{ flex: 1, height: 24, background: "#1a1508", borderRadius: 4, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${Math.round((cantidad / max) * 100)}%`, background: "#b8914a", borderRadius: 4, display: "flex", alignItems: "center", paddingLeft: 8 }}>
-                          {cantidad > 0 && <span style={{ fontSize: 11, color: "#0f0e0c", fontWeight: "bold" }}>{cantidad}</span>}
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {Array.from({ length: 7 }, (_, i) => {
+                    const fecha = sumarDias(fechaResumen, i);
+                    const cantidad = resumen.filter(r => r.fecha === fecha).length;
+                    const max = Math.max(...Array.from({ length: 7 }, (_, j) => {
+                      return resumen.filter(r => r.fecha === sumarDias(fechaResumen, j)).length;
+                    }), 1);
+                    const pct = Math.round((cantidad / max) * 100);
+                    const partes = fecha.split("-");
+                    const dLabel = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]));
+                    const label = dLabel.toLocaleDateString("es-CL", { weekday: "short", day: "numeric", month: "short" });
+                    return (
+                      <div key={fecha} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ width: 90, fontSize: 12, color: "#7a6a50", textAlign: "right", flexShrink: 0 }}>{label}</div>
+                        <div style={{ flex: 1, height: 24, background: "#1a1508", borderRadius: 4, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${pct}%`, background: "#b8914a", borderRadius: 4, transition: "width 0.3s", display: "flex", alignItems: "center", paddingLeft: 8 }}>
+                            {cantidad > 0 && <span style={{ fontSize: 11, color: "#0f0e0c", fontWeight: "bold" }}>{cantidad}</span>}
+                          </div>
                         </div>
+                        {cantidad === 0 && <span style={{ fontSize: 12, color: "#3a2a1a" }}>0</span>}
                       </div>
-                      {cantidad === 0 && <span style={{ fontSize: 12, color: "#3a2a1a" }}>0</span>}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
+
+              {/* Actividad por sector */}
               <div>
                 <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 12 }}>Actividad por sector</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
-                  {["Sector Isla","Sector Pantallas","Sector Escape","Sector DJ"].map(zona => {
+                  {["Sector Isla", "Sector Pantallas", "Sector Escape", "Sector DJ"].map(zona => {
                     const cantidad = resumen.filter(r => MESAS.find(m => m.id === r.mesa_id)?.zona === zona).length;
                     const emoji = zona === "Sector Isla" ? "🏝️" : zona === "Sector Pantallas" ? "📺" : zona === "Sector Escape" ? "🚪" : "🎧";
                     return (
@@ -831,6 +615,32 @@ function AdminPanel() {
                   })}
                 </div>
               </div>
+
+              {/* Ranking de garzones */}
+              <div>
+                <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 12 }}>Ranking de garzones</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {(() => {
+                    const conteo = {};
+                    resumen.forEach(r => { if (r.garzon) conteo[r.garzon] = (conteo[r.garzon] || 0) + 1; });
+                    const ranking = Object.entries(conteo).sort((a, b) => b[1] - a[1]);
+                    const maxVal = ranking[0]?.[1] || 1;
+                    if (ranking.length === 0) return <div style={{ fontSize: 13, color: "#4a3a22" }}>Sin datos de garzones aún</div>;
+                    return ranking.map(([nombre, cant], idx) => (
+                      <div key={nombre} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ width: 24, fontSize: 13, color: idx === 0 ? "#b8914a" : "#5a4a30", textAlign: "center", fontWeight: "bold" }}>{idx + 1}</div>
+                        <div style={{ width: 120, fontSize: 13, color: "#e8dcc8", flexShrink: 0 }}>{nombre}</div>
+                        <div style={{ flex: 1, height: 22, background: "#1a1508", borderRadius: 4, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${Math.round((cant / maxVal) * 100)}%`, background: idx === 0 ? "#b8914a" : "#3a2e1a", borderRadius: 4, display: "flex", alignItems: "center", paddingLeft: 8 }}>
+                            <span style={{ fontSize: 11, color: idx === 0 ? "#0f0e0c" : "#7a6a50", fontWeight: "bold" }}>{cant}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </div>
+
             </div>
           )}
         </div>
@@ -840,7 +650,8 @@ function AdminPanel() {
         <div>
           {cargandoLog ? <Spinner /> : logActividad.length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 20px", color: "#4a3a22", border: "1px dashed #2a1e0a", borderRadius: 6 }}>
-              <div style={{ fontSize: 38, marginBottom: 10 }}>📋</div><div>Sin actividad registrada</div>
+              <div style={{ fontSize: 38, marginBottom: 10 }}>📋</div>
+              <div>Sin actividad registrada</div>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -864,13 +675,14 @@ function AdminPanel() {
       {tab === "micuenta" && (
         <div style={{ maxWidth: 420 }}>
           <div style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 8, padding: 24 }}>
-            <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 16 }}>Cambiar credenciales</div>
+            <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 16 }}>Cambiar credenciales de administrador</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <Field label="Nuevo usuario"><input value={adminForm.usuario} onChange={e => { setAdminForm(p => ({ ...p, usuario: e.target.value })); setAdminError(""); }} placeholder="Nuevo usuario" style={inp} /></Field>
               <Field label="Nueva contraseña"><input type="password" value={adminForm.password} onChange={e => { setAdminForm(p => ({ ...p, password: e.target.value })); setAdminError(""); }} placeholder="Nueva contraseña" style={inp} /></Field>
-              <Field label="Confirmar"><input type="password" value={adminForm.confirmar} onChange={e => { setAdminForm(p => ({ ...p, confirmar: e.target.value })); setAdminError(""); }} placeholder="Repetir contraseña" style={inp} /></Field>
+              <Field label="Confirmar contraseña"><input type="password" value={adminForm.confirmar} onChange={e => { setAdminForm(p => ({ ...p, confirmar: e.target.value })); setAdminError(""); }} placeholder="Repetir contraseña" style={inp} /></Field>
               {adminError && <div style={{ background: "#2a1010", border: "1px solid #5a2020", color: "#cb7e7e", padding: "10px 14px", borderRadius: 4, fontSize: 13 }}>{adminError}</div>}
               <button onClick={guardarAdmin} style={btn("gold")}>Guardar cambios</button>
+              <div style={{ fontSize: 12, color: "#5a4a30" }}>⚠️ Asegúrate de recordar las nuevas credenciales antes de guardar.</div>
             </div>
           </div>
         </div>
@@ -881,7 +693,7 @@ function AdminPanel() {
           <div style={{ background: "#15120a", border: "1px solid #3a2e1a", borderRadius: 8, padding: 32, maxWidth: 380, width: "100%", textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
             <div style={{ fontSize: 17, color: "#f5e6c8", marginBottom: 8 }}>Eliminar usuario</div>
-            <div style={{ fontSize: 14, color: "#7a6a50", marginBottom: 24 }}>¿Eliminar a <strong style={{ color: "#e8dcc8" }}>{confirmarEliminar.nombre}</strong>?</div>
+            <div style={{ fontSize: 14, color: "#7a6a50", marginBottom: 24 }}>¿Eliminar a <strong style={{ color: "#e8dcc8" }}>{confirmarEliminar.nombre}</strong> permanentemente?</div>
             <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
               <button onClick={() => eliminar(confirmarEliminar)} style={btn("danger")}>Sí, eliminar</button>
               <button onClick={() => setConfirmarEliminar(null)} style={btn("ghost")}>Cancelar</button>
@@ -889,12 +701,13 @@ function AdminPanel() {
           </div>
         </div>
       )}
+
       {confirmarEliminarLn && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
           <div style={{ background: "#15120a", border: "1px solid #3a2e1a", borderRadius: 8, padding: 32, maxWidth: 380, width: "100%", textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
             <div style={{ fontSize: 17, color: "#f5e6c8", marginBottom: 8 }}>Remover de lista negra</div>
-            <div style={{ fontSize: 14, color: "#7a6a50", marginBottom: 24 }}>¿Remover a <strong style={{ color: "#e8dcc8" }}>{confirmarEliminarLn.nombre} {confirmarEliminarLn.apellido}</strong>?</div>
+            <div style={{ fontSize: 14, color: "#7a6a50", marginBottom: 24 }}>¿Remover a <strong style={{ color: "#e8dcc8" }}>{confirmarEliminarLn.nombre} {confirmarEliminarLn.apellido}</strong> de la lista negra?</div>
             <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
               <button onClick={() => eliminarListaNegra(confirmarEliminarLn)} style={btn("danger")}>Sí, remover</button>
               <button onClick={() => setConfirmarEliminarLn(null)} style={btn("ghost")}>Cancelar</button>
@@ -914,17 +727,13 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   const [reservaAEliminar, setReservaAEliminar] = useState(null);
   const [reservaExpandida, setReservaExpandida] = useState(null);
   const [busqueda, setBusqueda] = useState("");
-  const [listaNegra, setListaNegra] = useState([]);
-
-  // ── ESTADO FORMULARIO CON SCANNER ──────────────────────────
-  const [personas, setPersonas] = useState([]); // Lista de personas escaneadas
-  const [scannerAbierto, setScannerAbierto] = useState(false);
+  const [textoCliente, setTextoCliente] = useState("");
+  const [clientesParsed, setClientesParsed] = useState([]);
   const [alertaListaNegra, setAlertaListaNegra] = useState([]);
+  const [listaNegra, setListaNegra] = useState([]);
   const [form, setForm] = useState({ fecha: today(), mesa_id: "", nota: "Reserva" });
   const [error, setError] = useState("");
   const [exitoMsg, setExitoMsg] = useState("");
-  const [agregarManualIdx, setAgregarManualIdx] = useState(null);
-  const [manualForm, setManualForm] = useState({ nombre: "", apellido: "", rut: "" });
 
   const flash = (t) => { setExitoMsg(t); setTimeout(() => setExitoMsg(""), 3000); };
 
@@ -934,61 +743,45 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   const cargarListaNegra = async () => { const data = await db.get("lista_negra", "select=*"); setListaNegra(Array.isArray(data) ? data : []); };
 
   const reservasPorSector = useMemo(() => sesion.rol === "admin" ? reservas : reservas.filter(r => { const mesa = MESAS.find(m => m.id === r.mesa_id); return mesa?.zona === sectorSesion; }), [reservas, sesion.rol, sectorSesion]);
+
   const reservasFiltradas = useMemo(() => {
     if (!busqueda.trim()) return reservasPorSector;
     const q = busqueda.toLowerCase().trim();
     return reservasPorSector.filter(r => {
       const participantes = Array.isArray(r.participantes) ? r.participantes : [];
-      return `${r.nombre} ${r.apellido} ${r.rut}`.toLowerCase().includes(q) ||
-        participantes.some(p => `${p.nombre} ${p.apellido} ${p.rut}`.toLowerCase().includes(q));
+      const enTitular = `${r.nombre} ${r.apellido} ${r.rut}`.toLowerCase().includes(q);
+      const enParticipantes = participantes.some(p => `${p.nombre} ${p.apellido} ${p.rut}`.toLowerCase().includes(q));
+      return enTitular || enParticipantes;
     });
   }, [reservasPorSector, busqueda]);
-
   const mesasDisponibles = () => { const ocupadas = reservas.map(r => r.mesa_id); return MESAS.filter(m => !ocupadas.includes(m.id)); };
 
-  // ── LÓGICA SCANNER ──────────────────────────────────────────
-  const onScanResult = async (data) => {
-    setScannerAbierto(false);
-    if (personas.length >= 5) { setError("Máximo 5 personas por mesa."); return; }
-    // Verificar duplicado por RUN
-    if (personas.some(p => normalizarRut(p.rut) === normalizarRut(data.run))) {
-      setError(`${data.run} ya fue escaneado.`); return;
+  const handlePasteCliente = async (texto) => {
+    setTextoCliente(texto);
+    setAlertaListaNegra([]);
+    if (!texto.trim()) { setClientesParsed([]); return; }
+    const clientes = parsearTodosClientes(texto);
+    setClientesParsed(clientes);
+    // Validar máximo de personas
+    if (clientes.length > 5) {
+      setError(`⚠️ Máximo 5 personas por mesa. Tienes ${clientes.length}.`);
+      return;
     }
-    const nuevaPersona = { nombre: data.nombre, apellido: data.apellido, rut: data.run };
-    const nuevasPersonas = [...personas, nuevaPersona];
-    setPersonas(nuevasPersonas);
-    setError("");
-    // Verificar lista negra
+    // Validar RUTs - obligatorio y válido
+    const sinRut = clientes.filter(c => !c.rut || c.rut.trim() === "");
+    const rutsInvalidos = clientes.filter(c => c.rut && c.rut.trim() !== "" && !validarRut(c.rut));
+    if (sinRut.length > 0) {
+      setError(`⚠️ RUT obligatorio: ${sinRut.map(c => `${c.nombre} ${c.apellido}`).join(", ")} no tiene RUT.`);
+    } else if (rutsInvalidos.length > 0) {
+      setError(`⚠️ RUT inválido: ${rutsInvalidos.map(c => `${c.nombre} ${c.apellido} (${c.rut})`).join(", ")}`);
+    } else {
+      setError("");
+    }
+    // Cargar lista negra fresca desde Supabase en cada verificación
     const lnFresh = await db.get("lista_negra", "select=*");
     const lnArray = Array.isArray(lnFresh) ? lnFresh : [];
     setListaNegra(lnArray);
-    const bloqueados = nuevasPersonas.map(p => ({ cliente: p, match: estaEnListaNegra(p, lnArray) })).filter(x => x.match);
-    setAlertaListaNegra(bloqueados);
-  };
-
-  const eliminarPersona = (idx) => {
-    const nuevas = personas.filter((_, i) => i !== idx);
-    setPersonas(nuevas);
-    const bloqueados = nuevas.map(p => ({ cliente: p, match: estaEnListaNegra(p, listaNegra) })).filter(x => x.match);
-    setAlertaListaNegra(bloqueados);
-  };
-
-  const editarNombrePersona = (idx, nombre, apellido) => {
-    const nuevas = personas.map((p, i) => i === idx ? { ...p, nombre, apellido } : p);
-    setPersonas(nuevas);
-  };
-
-  const agregarManual = () => {
-    if (!manualForm.rut.trim()) { setError("El RUT es obligatorio."); return; }
-    if (!validarRut(manualForm.rut)) { setError("RUT inválido."); return; }
-    if (personas.some(p => normalizarRut(p.rut) === normalizarRut(manualForm.rut))) { setError("Este RUT ya está en la lista."); return; }
-    const nueva = { nombre: manualForm.nombre.trim(), apellido: manualForm.apellido.trim(), rut: manualForm.rut.trim() };
-    const nuevas = [...personas, nueva];
-    setPersonas(nuevas);
-    setManualForm({ nombre: "", apellido: "", rut: "" });
-    setAgregarManualIdx(null);
-    setError("");
-    const bloqueados = nuevas.map(p => ({ cliente: p, match: estaEnListaNegra(p, listaNegra) })).filter(x => x.match);
+    const bloqueados = clientes.map(c => ({ cliente: c, match: estaEnListaNegra(c, lnArray) })).filter(x => x.match);
     setAlertaListaNegra(bloqueados);
   };
 
@@ -999,56 +792,74 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   };
 
   const handleSubmit = async () => {
-    if (personas.length === 0) return setError("Debes escanear al menos al titular.");
-    const titular = personas[0];
-    if (!titular.nombre && !titular.apellido) return setError("El titular no tiene nombre. Edítalo antes de continuar.");
+    if (clientesParsed.length === 0) return setError("Pega los datos del cliente en el cuadro de texto.");
+    const titular = clientesParsed[0];
+    if (!titular.nombre) return setError("No se pudo identificar el nombre del titular.");
+    if (!titular.rut) return setError("No se pudo identificar el RUT del titular.");
     if (!form.mesa_id) return setError("Selecciona una mesa en el mapa.");
-    if (personas.length > 5) return setError("Máximo 5 personas por mesa.");
-    const sinRut = personas.filter(p => !p.rut);
-    if (sinRut.length > 0) return setError(`Falta RUT en: ${sinRut.map(p => p.nombre || "persona").join(", ")}`);
-    const rutsInvalidos = personas.filter(p => !validarRut(p.rut));
-    if (rutsInvalidos.length > 0) return setError(`RUT inválido: ${rutsInvalidos.map(p => `${p.nombre} (${p.rut})`).join(", ")}`);
+    // Validar máximo de personas
+    if (clientesParsed.length > 5) return setError(`⚠️ Máximo 5 personas por mesa. Tienes ${clientesParsed.length}.`);
+    // Validar RUTs - obligatorio y válido
+    const sinRut = clientesParsed.filter(c => !c.rut || c.rut.trim() === "");
+    if (sinRut.length > 0) return setError(`⚠️ RUT obligatorio: ${sinRut.map(c => `${c.nombre} ${c.apellido}`).join(", ")} no tiene RUT.`);
+    const rutsInvalidos = clientesParsed.filter(c => !validarRut(c.rut));
+    if (rutsInvalidos.length > 0) return setError(`⚠️ RUT inválido: ${rutsInvalidos.map(c => `${c.nombre} ${c.apellido} (${c.rut})`).join(", ")}`);
+    // Verificar lista negra nuevamente al momento de confirmar
     const lnFinal = await db.get("lista_negra", "select=*");
     const lnFinalArray = Array.isArray(lnFinal) ? lnFinal : [];
-    const bloqueadosFinal = personas.map(p => ({ cliente: p, match: estaEnListaNegra(p, lnFinalArray) })).filter(x => x.match);
+    const bloqueadosFinal = clientesParsed.map(c => ({ cliente: c, match: estaEnListaNegra(c, lnFinalArray) })).filter(x => x.match);
+    if (bloqueadosFinal.length > 0) setAlertaListaNegra(bloqueadosFinal);
+
     if (bloqueadosFinal.length > 0) {
-      setAlertaListaNegra(bloqueadosFinal);
+      // Registrar intento bloqueado
       for (const x of bloqueadosFinal) {
-        await db.post("intentos_bloqueados", { cliente_nombre: x.cliente.nombre, cliente_apellido: x.cliente.apellido, cliente_rut: x.cliente.rut, garzon_nombre: sesion.nombre, fecha_reserva: form.fecha, mesa_id: parseInt(form.mesa_id), visto: false });
+        await db.post("intentos_bloqueados", {
+          cliente_nombre: x.cliente.nombre, cliente_apellido: x.cliente.apellido,
+          cliente_rut: x.cliente.rut, garzon_nombre: sesion.nombre,
+          fecha_reserva: form.fecha, mesa_id: parseInt(form.mesa_id), visto: false,
+        });
       }
-      return setError(`🚫 Reserva bloqueada: ${bloqueadosFinal.map(x => `${x.cliente.nombre} ${x.cliente.apellido}`).join(", ")} está en lista negra.`);
+      return setError(`🚫 Reserva bloqueada: ${bloqueadosFinal.map(x => `${x.cliente.nombre} ${x.cliente.apellido}`).join(", ")} está en lista negra. Se notificó al administrador.`);
     }
+    const mesa = MESAS.find(m => m.id === parseInt(form.mesa_id));
+    if (parseInt(form.personas) > mesa.capacidad) return setError(`Mesa ${mesa.id}: máximo ${mesa.capacidad} personas.`);
     const yaReservada = reservas.some(r => r.mesa_id === parseInt(form.mesa_id) && r.fecha === form.fecha);
     if (yaReservada) return setError(`La mesa ${form.mesa_id} ya tiene una reserva para esa noche.`);
+
     await db.post("reservas", {
       nombre: titular.nombre, apellido: titular.apellido, rut: titular.rut,
-      fecha: form.fecha, hora: "23:30", personas: personas.length,
+      fecha: form.fecha, hora: "23:30", personas: clientesParsed.length,
       mesa_id: parseInt(form.mesa_id), nota: form.nota.trim(),
-      participantes: personas.slice(1),
+      participantes: clientesParsed.slice(1),
       garzon: sesion.nombre,
     });
     const fechaReserva = form.fecha;
-    setPersonas([]); setAlertaListaNegra([]);
+    setTextoCliente(""); setClientesParsed([]); setAlertaListaNegra([]);
     setForm({ fecha: today(), mesa_id: "", nota: "Reserva" });
+    // Cargar reservas directamente antes de cambiar de vista
     setCargando(true);
     const dataFresh = await db.get("reservas", `fecha=eq.${fechaReserva}&select=*&order=nombre.asc`);
     setReservas(dataFresh);
     setCargando(false);
     setFechaSeleccionada(fechaReserva);
     setVista("dia");
-    await registrarLog("RESERVA", `Mesa ${form.mesa_id} — ${titular.nombre} ${titular.apellido} (${titular.rut}), ${personas.length} persona(s)`);
+    await registrarLog("RESERVA", `Mesa ${form.mesa_id} — ${titular.nombre} ${titular.apellido} (${titular.rut}), ${clientesParsed.length} persona(s)`);
     flash("¡Reserva creada correctamente!");
   };
 
   const registrarLog = async (accion, detalle) => {
-    try { await db.post("log_actividad", { accion, garzon: sesion.nombre, detalle }); } catch {}
+    try {
+      await db.post("log_actividad", { accion, garzon: sesion.nombre, detalle });
+    } catch {}
   };
 
   const cancelarReserva = async () => {
     const r = reservaAEliminar;
     await db.delete("reservas", r.id);
     await registrarLog("CANCELACION", `Mesa ${r.mesa_id} — ${r.nombre} ${r.apellido} (${r.rut})`);
-    setReservaAEliminar(null); flash("Reserva cancelada."); cargarReservas();
+    setReservaAEliminar(null);
+    flash("Reserva cancelada.");
+    cargarReservas();
   };
 
   const exportarPDF = () => {
@@ -1057,12 +868,50 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
       const mesa = MESAS.find(m => m.id === r.mesa_id);
       const participantes = Array.isArray(r.participantes) ? r.participantes : [];
       const participantesHtml = participantes.length > 0
-        ? `<div style="margin-top:4px;padding-left:12px;font-size:11px;color:#555">${participantes.map((p, i) => `${i + 2}. ${p.nombre} ${p.apellido} — ${p.rut}`).join("<br/>")}</div>` : "";
-      return `<tr><td style="padding:8px;border-bottom:1px solid #ddd;font-weight:bold">${r.mesa_id}</td><td style="padding:8px;border-bottom:1px solid #ddd">${mesa?.zona || ""}</td><td style="padding:8px;border-bottom:1px solid #ddd"><strong>${r.nombre} ${r.apellido}</strong><br/><span style="font-size:11px;color:#666">${r.rut}</span>${participantesHtml}</td><td style="padding:8px;border-bottom:1px solid #ddd;text-align:center">${r.personas}</td><td style="padding:8px;border-bottom:1px solid #ddd;font-size:11px;color:#666">${r.nota || ""}</td><td style="padding:8px;border-bottom:1px solid #ddd;font-size:11px;color:#666">${r.garzon || ""}</td></tr>`;
+        ? `<div style="margin-top:4px;padding-left:12px;font-size:11px;color:#555">${participantes.map((p, i) => `${i + 2}. ${p.nombre} ${p.apellido} — ${p.rut}`).join("<br/>")}</div>`
+        : "";
+      return `
+        <tr>
+          <td style="padding:8px;border-bottom:1px solid #ddd;font-weight:bold">${r.mesa_id}</td>
+          <td style="padding:8px;border-bottom:1px solid #ddd">${mesa?.zona || ""}</td>
+          <td style="padding:8px;border-bottom:1px solid #ddd">
+            <strong>${r.nombre} ${r.apellido}</strong><br/>
+            <span style="font-size:11px;color:#666">${r.rut}</span>
+            ${participantesHtml}
+          </td>
+          <td style="padding:8px;border-bottom:1px solid #ddd;text-align:center">${r.personas}</td>
+          <td style="padding:8px;border-bottom:1px solid #ddd;font-size:11px;color:#666">${r.nota || ""}</td>
+          <td style="padding:8px;border-bottom:1px solid #ddd;font-size:11px;color:#666">${r.garzon || ""}</td>
+        </tr>`;
     }).join("");
-    const html = `<html><head><meta charset="utf-8"><title>Reservas Calafate ${fechaSeleccionada}</title><style>body{font-family:Georgia,serif;padding:30px;color:#222}h1{font-size:22px;margin-bottom:4px}h2{font-size:14px;font-weight:normal;color:#666;margin-bottom:20px}table{width:100%;border-collapse:collapse}th{background:#1a1208;color:#f5e6c8;padding:10px 8px;text-align:left;font-size:12px;letter-spacing:1px;text-transform:uppercase}tr:nth-child(even){background:#f9f6f0}.footer{margin-top:20px;font-size:11px;color:#999}</style></head><body><h1>🎶 Calafate Discoteca</h1><h2>Reservas del ${fecha}${sectorSesion && sesion.rol !== "admin" ? ` · ${sectorSesion}` : ""} — ${reservasFiltradas.length} reservas</h2><table><thead><tr><th>Mesa</th><th>Sector</th><th>Titular / Participantes</th><th>Pers.</th><th>Nota</th><th>Garzón</th></tr></thead><tbody>${filas}</tbody></table><div class="footer">Generado el ${new Date().toLocaleString("es-CL")}</div></body></html>`;
+
+    const html = `
+      <html><head><meta charset="utf-8">
+      <title>Reservas Calafate ${fechaSeleccionada}</title>
+      <style>
+        body { font-family: Georgia, serif; padding: 30px; color: #222; }
+        h1 { font-size: 22px; margin-bottom: 4px; }
+        h2 { font-size: 14px; font-weight: normal; color: #666; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #1a1208; color: #f5e6c8; padding: 10px 8px; text-align: left; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+        tr:nth-child(even) { background: #f9f6f0; }
+        .footer { margin-top: 20px; font-size: 11px; color: #999; }
+      </style>
+      </head><body>
+      <h1>🎶 Calafate Discoteca</h1>
+      <h2>Reservas del ${fecha}${sectorSesion && sesion.rol !== "admin" ? ` · ${sectorSesion}` : ""} — ${reservasFiltradas.length} reservas</h2>
+      <table>
+        <thead><tr>
+          <th>Mesa</th><th>Sector</th><th>Titular / Participantes</th><th>Pers.</th><th>Nota</th><th>Garzón</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
+      </table>
+      <div class="footer">Generado el ${new Date().toLocaleString("es-CL")}</div>
+      </body></html>`;
+
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-    window.open(URL.createObjectURL(blob), "_blank");
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
   };
 
   const tabs = [
@@ -1073,9 +922,6 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0f0e0c", fontFamily: "'Georgia', serif", color: "#e8dcc8" }}>
-      {/* Librería Html5Qrcode cargada dinámicamente */}
-      <link rel="preload" as="script" href="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" />
-
       <div style={{ background: "linear-gradient(180deg, #1a1208 0%, #0f0e0c 100%)", borderBottom: "1px solid #3a2e1a", padding: "20px 24px 0" }}>
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
@@ -1093,7 +939,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                 <div style={{ fontSize: 13, color: "#f5e6c8" }}>{sesion.nombre}</div>
                 <div style={{ fontSize: 10, color: "#7a6a50", textTransform: "uppercase", letterSpacing: 1 }}>{sesion.rol === "admin" ? "Administrador" : sectorSesion}</div>
               </div>
-              <button onClick={() => { setVista("formulario"); setError(""); setPersonas([]); setAlertaListaNegra([]); setForm({ fecha: today(), mesa_id: "", nota: "Reserva" }); }} style={{ ...btn("gold"), padding: "8px 16px", fontSize: 13 }}>+ Nueva Reserva</button>
+              <button onClick={() => { setVista("formulario"); setError(""); }} style={{ ...btn("gold"), padding: "8px 16px", fontSize: 13 }}>+ Nueva Reserva</button>
               <button onClick={onLogout} style={{ ...btn("ghost"), fontSize: 12, padding: "7px 14px", color: "#7a6a50" }}>Salir</button>
             </div>
           </div>
@@ -1118,19 +964,27 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
               <input type="date" value={fechaSeleccionada} onChange={e => setFechaSeleccionada(e.target.value)} style={{ ...inp, width: "auto" }} />
               <button onClick={exportarPDF} title="Exportar PDF" style={{ background: "#7a2020", border: "none", borderRadius: 4, padding: "6px 10px", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>📄</button>
               <span style={{ background: "#2a1e0a", border: "1px solid #3a2e1a", color: "#b8914a", padding: "5px 14px", borderRadius: 20, fontSize: 13 }}>
-                {busqueda ? `${reservasFiltradas.length} de ${reservasPorSector.length} reservas` : `${reservasFiltradas.length} reservas`}
+                {busqueda ? `${reservasFiltradas.length} de ${reservasPorSector.length} reservas` : `${reservasFiltradas.length} reservas${sectorSesion && sesion.rol !== "admin" ? ` · ${sectorSesion}` : ""}`}
               </span>
               <button onClick={cargarReservas} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px" }}>↻ Actualizar</button>
+
             </div>
             <div style={{ position: "relative", marginBottom: 16 }}>
-              <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar por nombre, apellido o RUT..." style={{ ...inp, paddingLeft: 36 }} />
+              <input
+                value={busqueda}
+                onChange={e => setBusqueda(e.target.value)}
+                placeholder="Buscar por nombre, apellido o RUT..."
+                style={{ ...inp, paddingLeft: 36 }}
+              />
               <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#5a4a30", fontSize: 15 }}>🔍</span>
-              {busqueda && <button onClick={() => setBusqueda("")} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#7a6a50", cursor: "pointer", fontSize: 16 }}>✕</button>}
+              {busqueda && (
+                <button onClick={() => setBusqueda("")} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#7a6a50", cursor: "pointer", fontSize: 16 }}>✕</button>
+              )}
             </div>
             {cargando ? <Spinner /> : reservasFiltradas.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 20px", color: "#4a3a22", border: "1px dashed #2a1e0a", borderRadius: 6 }}>
                 <div style={{ fontSize: 38, marginBottom: 10 }}>📅</div>
-                <div>{busqueda ? `Sin resultados para "${busqueda}"` : "Sin reservas para este día"}</div>
+                <div>{busqueda ? `Sin resultados para "${busqueda}"` : `Sin reservas para este día${sectorSesion && sesion.rol !== "admin" ? ` en ${sectorSesion}` : ""}`}</div>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -1142,6 +996,9 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                     <div key={r.id} style={{ background: "#15120a", border: "1px solid #2a2010", borderLeft: "3px solid #b8914a", borderRadius: 6, overflow: "hidden" }}>
                       <div onClick={() => setReservaExpandida(expandida ? null : r.id)} style={{ padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, cursor: "pointer" }}>
                         <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+                          <div style={{ background: "#1e1608", border: "1px solid #3a2e1a", borderRadius: 4, padding: "6px 14px", textAlign: "center", minWidth: 58 }}>
+                            <div style={{ fontSize: 16, color: "#f5e6c8", fontWeight: "bold" }}>23:30</div>
+                          </div>
                           <div style={{ background: "#1e1608", border: "1px solid #b8914a", borderRadius: 4, padding: "6px 14px", textAlign: "center", minWidth: 58 }}>
                             <div style={{ fontSize: 10, color: "#b8914a", letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 }}>Mesa</div>
                             <div style={{ fontSize: 16, color: "#f5e6c8", fontWeight: "bold" }}>{r.mesa_id}</div>
@@ -1149,26 +1006,36 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                           <div>
                             <div style={{ fontSize: 15, color: "#f5e6c8", marginBottom: 3 }}>
                               {r.nombre} {r.apellido}
-                              {participantes.length > 0 && <span style={{ marginLeft: 8, fontSize: 11, color: "#b8914a", background: "#2a1e0a", padding: "2px 8px", borderRadius: 10 }}>+{participantes.length}</span>}
+                              {participantes.length > 0 && (
+                                <span style={{ marginLeft: 8, fontSize: 11, color: "#b8914a", background: "#2a1e0a", padding: "2px 8px", borderRadius: 10 }}>
+                                  +{participantes.length} participante{participantes.length > 1 ? "s" : ""}
+                                </span>
+                              )}
                             </div>
-                            <div style={{ fontSize: 12, color: "#7a6a50" }}>🪪 {r.rut} &nbsp;·&nbsp; 👥 {r.personas} pers. &nbsp;·&nbsp; {mesa?.zona}{r.garzon && <span> &nbsp;·&nbsp; 👤 {r.garzon}</span>}</div>
+                            <div style={{ fontSize: 12, color: "#7a6a50" }}>
+                              🪪 {r.rut} &nbsp;·&nbsp; 👥 {r.personas} pers. &nbsp;·&nbsp;
+                              <span style={{ color: "#7a6a50" }}>{mesa?.zona}</span>
+                              {r.garzon && <span> &nbsp;·&nbsp; 👤 {r.garzon}</span>}
+                            </div>
                             {r.nota && <div style={{ fontSize: 12, color: "#b8914a", marginTop: 3 }}>📝 {r.nota}</div>}
                           </div>
                         </div>
                         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                           <span style={{ fontSize: 13, color: "#5a4a30" }}>{expandida ? "▲" : "▼"}</span>
-                          <button onClick={e => { e.stopPropagation(); setReservaAEliminar(r); }} style={{ ...btn("ghost"), fontSize: 12, padding: "6px 14px", color: "#9a5050", borderColor: "#4a2020" }}>Cancelar</button>
+                          <button onClick={e => { e.stopPropagation(); setReservaAEliminar(r); }} style={{ ...btn("ghost"), fontSize: 12, padding: "6px 14px", color: "#9a5050", borderColor: "#4a2020" }}>Cancelar reserva</button>
                         </div>
                       </div>
+
                       {expandida && (
                         <div style={{ borderTop: "1px solid #2a2010", padding: "12px 18px", background: "#0f0c06" }}>
-                          <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 10 }}>Participantes</div>
+                          <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 10 }}>Lista de participantes</div>
                           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px", background: "#1a1508", borderRadius: 4, border: "1px solid #2a2010" }}>
                               <span style={{ fontSize: 10, background: "#b8914a", color: "#0f0e0c", padding: "2px 7px", borderRadius: 10, fontWeight: "bold" }}>TITULAR</span>
                               <span style={{ fontSize: 14, color: "#f5e6c8" }}>{r.nombre} {r.apellido}</span>
                               <span style={{ fontSize: 12, color: "#7a6a50", marginLeft: "auto" }}>🪪 {r.rut}</span>
                             </div>
+                            {participantes.length === 0 && <div style={{ fontSize: 12, color: "#4a3a22", padding: "6px 12px" }}>Sin participantes adicionales</div>}
                             {participantes.map((p, idx) => (
                               <div key={idx} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px", background: "#1a1508", borderRadius: 4, border: "1px solid #2a2010" }}>
                                 <span style={{ fontSize: 12, color: "#5a4a30", minWidth: 20 }}>{idx + 2}.</span>
@@ -1192,8 +1059,10 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16, flexWrap: "wrap" }}>
               <label style={{ color: "#7a6a50", fontSize: 12, letterSpacing: 1, textTransform: "uppercase" }}>Fecha:</label>
               <input type="date" value={fechaSeleccionada} onChange={e => setFechaSeleccionada(e.target.value)} style={{ ...inp, width: "auto" }} />
-              <span style={{ background: "#2a1e0a", border: "1px solid #3a2e1a", color: "#7ecb7e", padding: "5px 14px", borderRadius: 20, fontSize: 13 }}>{mesasDisponibles().length} disponibles</span>
+              <button onClick={exportarPDF} title="Exportar PDF" style={{ background: "#7a2020", border: "none", borderRadius: 4, padding: "6px 10px", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>📄</button>
+              <span style={{ background: "#2a1e0a", border: "1px solid #3a2e1a", color: "#7ecb7e", padding: "5px 14px", borderRadius: 20, fontSize: 13 }}>{mesasDisponibles().length} disponibles en total</span>
             </div>
+            {/* Resumen por sector */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 20 }}>
               {SECTORES.map(zona => {
                 const totalZona = MESAS.filter(m => m.zona === zona).length;
@@ -1207,10 +1076,10 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                     <div style={{ fontSize: 11, color: "#7a6a50", marginBottom: 6 }}>{emoji} {zona}</div>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
                       <span style={{ fontSize: 22, fontWeight: "bold", color }}>{disponiblesZona}</span>
-                      <span style={{ fontSize: 12, color: "#5a4a30" }}>/ {totalZona}</span>
+                      <span style={{ fontSize: 12, color: "#5a4a30" }}>/ {totalZona} disponibles</span>
                     </div>
                     <div style={{ marginTop: 8, height: 4, background: "#2a2010", borderRadius: 2, overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${porcentaje}%`, background: color, borderRadius: 2 }} />
+                      <div style={{ height: "100%", width: `${porcentaje}%`, background: color, borderRadius: 2, transition: "width 0.3s" }} />
                     </div>
                   </div>
                 );
@@ -1223,83 +1092,81 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
         {vista === "formulario" && (
           <div style={{ maxWidth: 620, margin: "0 auto" }}>
             <h2 style={{ fontSize: 20, fontWeight: "normal", color: "#f5e6c8", marginBottom: 24, letterSpacing: 1 }}>Nueva Reserva</h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 6, padding: 16 }}>
+                <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#b8914a", marginBottom: 8 }}>Pegar lista de participantes</label>
+                <textarea
+                  value={textoCliente}
+                  onChange={e => handlePasteCliente(e.target.value)}
+                  placeholder={"Juan García 12.345.678-9\nMaría López 9.876.543-2\nPedro Soto 11.222.333-4"}
+                  rows={4}
+                  style={{ ...inp, resize: "vertical", fontFamily: "monospace", fontSize: 13 }}
+                />
+                <div style={{ fontSize: 11, color: "#5a4a30", marginTop: 6 }}>Primera línea = titular. Las siguientes son participantes adicionales.</div>
 
-              {/* ── SECCIÓN SCANNER ── */}
-              <div style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 8, padding: 20 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                  <div>
-                    <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase" }}>Participantes</div>
-                    <div style={{ fontSize: 12, color: "#5a4a30", marginTop: 3 }}>{personas.length} de 5 personas agregadas</div>
+                {clientesParsed.length > 0 && alertaListaNegra.length === 0 && (
+                  <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 4 }}>
+                    {clientesParsed.map((c, idx) => (
+                      <div key={idx} style={{ fontSize: 12, color: "#7ecb7e", display: "flex", gap: 8 }}>
+                        <span style={{ color: idx === 0 ? "#b8914a" : "#5a4a30" }}>{idx === 0 ? "★" : `${idx + 1}.`}</span>
+                        {c.nombre} {c.apellido} — {c.rut}
+                      </div>
+                    ))}
                   </div>
-                  {personas.length < 5 && (
-                    <button
-                      onClick={() => setScannerAbierto(true)}
-                      style={{ background: "#b8914a", border: "none", borderRadius: 6, color: "#0f0e0c", fontSize: 13, fontWeight: "bold", padding: "10px 18px", cursor: "pointer", fontFamily: "'Georgia', serif", display: "flex", alignItems: "center", gap: 7 }}
-                    >
-                      📷 Escanear cédula
-                    </button>
-                  )}
-                </div>
-
-                {personas.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "28px 20px", border: "1px dashed #3a2e1a", borderRadius: 6, color: "#5a4a30" }}>
-                    <div style={{ fontSize: 32, marginBottom: 8 }}>📷</div>
-                    <div style={{ fontSize: 13 }}>Escanea la cédula del titular primero,<br />luego agrega a los demás participantes.</div>
-                  </div>
-                ) : (
-                  <PanelPersonas
-                    personas={personas}
-                    onAgregarManual={() => setAgregarManualIdx(true)}
-                    onEliminar={eliminarPersona}
-                    onEditarNombre={editarNombrePersona}
-                    maxPersonas={5}
-                  />
                 )}
 
-                {/* Alerta lista negra */}
                 {alertaListaNegra.length > 0 && (
-                  <div style={{ marginTop: 14, background: "#2a0808", border: "1px solid #7a1a1a", borderRadius: 6, padding: "12px 14px" }}>
-                    <div style={{ fontSize: 13, color: "#f87171", fontWeight: "bold", marginBottom: 6 }}>🚫 Cliente en lista negra — reserva bloqueada</div>
+                  <div style={{ marginTop: 12, background: "#2a0808", border: "1px solid #7a1a1a", borderRadius: 4, padding: "12px 14px" }}>
+                    <div style={{ fontSize: 13, color: "#f87171", fontWeight: "bold", marginBottom: 6 }}>🚫 Cliente(s) en lista negra — reserva bloqueada</div>
                     {alertaListaNegra.map((x, idx) => (
                       <div key={idx} style={{ fontSize: 12, color: "#fca5a5", marginBottom: 2 }}>
-                        • {x.cliente.nombre} {x.cliente.apellido} ({x.cliente.rut}){x.match.motivo ? ` — ${x.match.motivo}` : ""}
+                        • {x.cliente.nombre} {x.cliente.apellido} ({x.cliente.rut}){x.match.motivo ? <span style={{ color: "#9a5050" }}> — {x.match.motivo}</span> : ""}
                       </div>
                     ))}
                   </div>
                 )}
               </div>
 
-              <Field label="Fecha">
-                <input type="date" name="fecha" value={form.fecha} onChange={handleFormChange} style={inp} />
-              </Field>
-
+              <Field label="Fecha"><input type="date" name="fecha" value={form.fecha} onChange={handleFormChange} style={inp} /></Field>
+              {clientesParsed.length > 0 && (
+                <div style={{ background: "#15120a", border: `1px solid ${clientesParsed.length > 5 ? "#7a2020" : "#3a5a1a"}`, borderRadius: 4, padding: "10px 14px", fontSize: 13, color: clientesParsed.length > 5 ? "#f87171" : "#7ecb7e" }}>
+                  👥 {clientesParsed.length} persona{clientesParsed.length > 1 ? "s" : ""} detectada{clientesParsed.length > 1 ? "s" : ""}
+                  {clientesParsed.length > 5 && <span style={{ marginLeft: 8, fontWeight: "bold" }}>— máximo 5</span>}
+                </div>
+              )}
               <div>
-                <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 8 }}>Seleccionar Mesa</label>
+                <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 8 }}>Seleccionar Mesa — haz clic en el mapa</label>
                 <FloorMap reservas={reservas} fecha={form.fecha} mesaSeleccionada={form.mesa_id ? parseInt(form.mesa_id) : null} onMesaClick={(id) => { setForm(p => ({ ...p, mesa_id: String(id) })); setError(""); }} soloZona={sesion.rol !== "admin" ? sectorSesion : null} />
                 {form.mesa_id && (
                   <div style={{ marginTop: 10, padding: "8px 14px", background: "#1a2010", border: "1px solid #3a5a1a", borderRadius: 4, fontSize: 13, color: "#7ecb7e" }}>
-                    ✓ Mesa {form.mesa_id} — {MESAS.find(m => m.id === parseInt(form.mesa_id))?.zona}
+                    ✓ Mesa {form.mesa_id} seleccionada — {MESAS.find(m => m.id === parseInt(form.mesa_id))?.zona}
                   </div>
                 )}
               </div>
-
               <Field label="Motivo">
                 <div style={{ display: "flex", gap: 10 }}>
                   {["Cumpleaños", "Reserva", "Evento especial"].map(opcion => (
-                    <button key={opcion} onClick={() => setForm(p => ({ ...p, nota: opcion }))}
-                      style={{ flex: 1, padding: "9px 6px", borderRadius: 3, cursor: "pointer", fontFamily: "'Georgia', serif", fontSize: 13, background: form.nota === opcion ? "#b8914a" : "#1a1508", color: form.nota === opcion ? "#0f0e0c" : "#7a6a50", border: form.nota === opcion ? "1px solid #b8914a" : "1px solid #2a2010", fontWeight: form.nota === opcion ? "bold" : "normal", transition: "all 0.15s" }}>
+                    <button
+                      key={opcion}
+                      onClick={() => setForm(p => ({ ...p, nota: opcion }))}
+                      style={{
+                        flex: 1, padding: "9px 6px", borderRadius: 3, cursor: "pointer",
+                        fontFamily: "'Georgia', serif", fontSize: 13,
+                        background: form.nota === opcion ? "#b8914a" : "#1a1508",
+                        color: form.nota === opcion ? "#0f0e0c" : "#7a6a50",
+                        border: form.nota === opcion ? "1px solid #b8914a" : "1px solid #2a2010",
+                        fontWeight: form.nota === opcion ? "bold" : "normal",
+                        transition: "all 0.15s",
+                      }}
+                    >
                       {opcion}
                     </button>
                   ))}
                 </div>
               </Field>
-
               {error && <div style={{ background: "#2a1010", border: "1px solid #5a2020", color: "#cb7e7e", padding: "10px 14px", borderRadius: 4, fontSize: 13 }}>{error}</div>}
-
               <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
-                <button onClick={handleSubmit} disabled={alertaListaNegra.length > 0 || personas.length === 0}
-                  style={{ ...btn("gold"), flex: 1, padding: "12px", fontSize: 15, opacity: (alertaListaNegra.length > 0 || personas.length === 0) ? 0.4 : 1, cursor: (alertaListaNegra.length > 0 || personas.length === 0) ? "not-allowed" : "pointer" }}>
+                <button onClick={handleSubmit} disabled={alertaListaNegra.length > 0} style={{ ...btn("gold"), flex: 1, padding: "12px", fontSize: 15, opacity: alertaListaNegra.length > 0 ? 0.4 : 1, cursor: alertaListaNegra.length > 0 ? "not-allowed" : "pointer" }}>
                   Confirmar Reserva
                 </button>
                 <button onClick={() => { setVista("dia"); setError(""); }} style={{ ...btn("ghost"), padding: "12px 20px" }}>Cancelar</button>
@@ -1311,31 +1178,6 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
         {vista === "admin" && sesion.rol === "admin" && <AdminPanel />}
       </div>
 
-      {/* ── MODAL SCANNER ── */}
-      {scannerAbierto && (
-        <QRScanner onResult={onScanResult} onClose={() => setScannerAbierto(false)} />
-      )}
-
-      {/* ── MODAL AGREGAR MANUAL ── */}
-      {agregarManualIdx && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 16 }}>
-          <div style={{ background: "#15120a", border: "1px solid #3a2e1a", borderRadius: 10, padding: 28, width: "100%", maxWidth: 400 }}>
-            <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 16 }}>Agregar manualmente</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <Field label="Nombre"><input value={manualForm.nombre} onChange={e => setManualForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Nombre" style={inp} /></Field>
-              <Field label="Apellido"><input value={manualForm.apellido} onChange={e => setManualForm(p => ({ ...p, apellido: e.target.value }))} placeholder="Apellido" style={inp} /></Field>
-              <Field label="RUT *"><input value={manualForm.rut} onChange={e => setManualForm(p => ({ ...p, rut: e.target.value }))} placeholder="12.345.678-9" style={inp} /></Field>
-              {error && <div style={{ background: "#2a1010", border: "1px solid #5a2020", color: "#cb7e7e", padding: "8px 12px", borderRadius: 4, fontSize: 12 }}>{error}</div>}
-              <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-                <button onClick={agregarManual} style={{ ...btn("gold"), flex: 1 }}>Agregar</button>
-                <button onClick={() => { setAgregarManualIdx(null); setManualForm({ nombre: "", apellido: "", rut: "" }); setError(""); }} style={btn("ghost")}>Cancelar</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── MODAL CANCELAR RESERVA ── */}
       {reservaAEliminar && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
           <div style={{ background: "#15120a", border: "1px solid #3a2e1a", borderRadius: 8, padding: 32, maxWidth: 400, width: "100%", textAlign: "center" }}>
@@ -1353,7 +1195,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   );
 }
 
-const TIMEOUT_MS = 15 * 60 * 1000;
+const TIMEOUT_MS = 15 * 60 * 1000; // 15 minutos
 
 export default function Root() {
   const [sesion, setSesion] = useState(() => {
@@ -1364,23 +1206,30 @@ export default function Root() {
   });
 
   const handleLogout = () => {
-    setSesion(null); setSector(null);
+    setSesion(null);
+    setSector(null);
     try { localStorage.removeItem("calafate_sesion"); localStorage.removeItem("calafate_sector"); } catch {}
   };
 
+  // Timeout de inactividad
   useEffect(() => {
     if (!sesion) return;
     let timer = setTimeout(handleLogout, TIMEOUT_MS);
-    const resetTimer = () => { clearTimeout(timer); timer = setTimeout(handleLogout, TIMEOUT_MS); };
+    const resetTimer = () => {
+      clearTimeout(timer);
+      timer = setTimeout(handleLogout, TIMEOUT_MS);
+    };
     const eventos = ["click", "keydown", "mousemove", "touchstart", "scroll"];
     eventos.forEach(e => window.addEventListener(e, resetTimer));
-    return () => { clearTimeout(timer); eventos.forEach(e => window.removeEventListener(e, resetTimer)); };
+    return () => {
+      clearTimeout(timer);
+      eventos.forEach(e => window.removeEventListener(e, resetTimer));
+    };
   }, [sesion]);
 
-  // ZXing se carga dinámicamente dentro del QRScanner cuando se necesita
-
   const handleLogin = (usuario) => {
-    setSesion(usuario); setSector(null);
+    setSesion(usuario);
+    setSector(null);
     try { localStorage.setItem("calafate_sesion", JSON.stringify(usuario)); localStorage.removeItem("calafate_sector"); } catch {}
   };
 
