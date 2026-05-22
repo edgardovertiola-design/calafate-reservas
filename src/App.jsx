@@ -954,6 +954,9 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   const [exitoMsg, setExitoMsg] = useState("");
   // NUEVO: estado scanner y personas escaneadas
   const [scannerAbierto, setScannerAbierto] = useState(false);
+  const [modalListaNegra, setModalListaNegra] = useState(null); // { persona, reservaId }
+  const [motivoLn, setMotivoLn] = useState("");
+  const [cargandoLn, setCargandoLn] = useState(false);
   const [personas, setPersonas] = useState([]); // personas escaneadas por QR
 
   const flash = (t) => { setExitoMsg(t); setTimeout(() => setExitoMsg(""), 3000); };
@@ -1100,6 +1103,24 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     flash("¡Reserva creada correctamente!");
   };
 
+  const agregarAListaNegra = async () => {
+    if (!modalListaNegra) return;
+    setCargandoLn(true);
+    const { persona } = modalListaNegra;
+    await db.post("lista_negra", {
+      nombre: persona.nombre,
+      apellido: persona.apellido,
+      rut: persona.rut,
+      motivo: motivoLn.trim() || "Conducta inapropiada",
+    });
+    await registrarLog("LISTA_NEGRA", `${persona.nombre} ${persona.apellido} (${persona.rut}) agregado por ${sesion.nombre}${motivoLn ? ` — ${motivoLn}` : ""}`);
+    setCargandoLn(false);
+    setModalListaNegra(null);
+    setMotivoLn("");
+    cargarListaNegra();
+    flash(`${persona.nombre} ${persona.apellido} agregado a lista negra.`);
+  };
+
   const registrarLog = async (accion, detalle) => {
     try { await db.post("log_actividad", { accion, garzon: sesion.nombre, detalle }); } catch {}
   };
@@ -1231,19 +1252,26 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                         <div style={{ borderTop: "1px solid #2a2010", padding: "12px 18px", background: "#0f0c06" }}>
                           <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 10 }}>Lista de participantes</div>
                           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px", background: "#1a1508", borderRadius: 4, border: "1px solid #2a2010" }}>
-                              <span style={{ fontSize: 10, background: "#b8914a", color: "#0f0e0c", padding: "2px 7px", borderRadius: 10, fontWeight: "bold" }}>TITULAR</span>
-                              <span style={{ fontSize: 14, color: "#f5e6c8" }}>{r.nombre} {r.apellido}</span>
-                              <span style={{ fontSize: 12, color: "#7a6a50", marginLeft: "auto" }}>🪪 {r.rut}</span>
-                            </div>
-                            {participantes.length === 0 && <div style={{ fontSize: 12, color: "#4a3a22", padding: "6px 12px" }}>Sin participantes adicionales</div>}
-                            {participantes.map((p, idx) => (
+                            {/* Titular + participantes con botón lista negra */}
+                            {[{ nombre: r.nombre, apellido: r.apellido, rut: r.rut, esTitular: true }, ...participantes.map(p => ({ ...p, esTitular: false }))].map((persona, idx) => (
                               <div key={idx} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px", background: "#1a1508", borderRadius: 4, border: "1px solid #2a2010" }}>
-                                <span style={{ fontSize: 12, color: "#5a4a30", minWidth: 20 }}>{idx + 2}.</span>
-                                <span style={{ fontSize: 14, color: "#e8dcc8" }}>{p.nombre} {p.apellido}</span>
-                                <span style={{ fontSize: 12, color: "#7a6a50", marginLeft: "auto" }}>🪪 {p.rut}</span>
+                                {persona.esTitular
+                                  ? <span style={{ fontSize: 10, background: "#b8914a", color: "#0f0e0c", padding: "2px 7px", borderRadius: 10, fontWeight: "bold", flexShrink: 0 }}>TITULAR</span>
+                                  : <span style={{ fontSize: 12, color: "#5a4a30", minWidth: 20, flexShrink: 0 }}>{idx + 1}.</span>
+                                }
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 14, color: "#f5e6c8" }}>{persona.nombre} {persona.apellido}</div>
+                                  <div style={{ fontSize: 11, color: "#7a6a50" }}>🪪 {persona.rut}</div>
+                                </div>
+                                <button
+                                  onClick={() => { setModalListaNegra({ persona, reservaId: r.id }); setMotivoLn(""); }}
+                                  title="Agregar a lista negra"
+                                  style={{ background: "none", border: "1px solid #4a2020", borderRadius: 4, color: "#9a5050", fontSize: 11, padding: "3px 8px", cursor: "pointer", flexShrink: 0, fontFamily: "'Georgia', serif" }}>
+                                  🚫
+                                </button>
                               </div>
                             ))}
+                            {participantes.length === 0 && <div style={{ fontSize: 12, color: "#4a3a22", padding: "6px 12px" }}>Sin participantes adicionales</div>}
                           </div>
                         </div>
                       )}
@@ -1422,6 +1450,39 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
       {/* NUEVO: Modal scanner */}
       {scannerAbierto && (
         <QRScanner onResult={onScanResult} onClose={() => setScannerAbierto(false)} />
+      )}
+
+      {/* NUEVO: Modal agregar a lista negra */}
+      {modalListaNegra && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 150, padding: 16 }}>
+          <div style={{ background: "#15120a", border: "1px solid #5a2020", borderRadius: 10, padding: 28, width: "100%", maxWidth: 400 }}>
+            <div style={{ fontSize: 11, letterSpacing: 3, color: "#cb7e7e", textTransform: "uppercase", marginBottom: 16 }}>Agregar a lista negra</div>
+            <div style={{ background: "#1a0808", border: "1px solid #4a2020", borderRadius: 6, padding: "12px 14px", marginBottom: 16 }}>
+              <div style={{ fontSize: 15, color: "#f5e6c8", marginBottom: 4 }}>{modalListaNegra.persona.nombre} {modalListaNegra.persona.apellido}</div>
+              <div style={{ fontSize: 12, color: "#7a6a50" }}>🪪 {modalListaNegra.persona.rut}</div>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 6 }}>Motivo (opcional)</label>
+              <input
+                value={motivoLn}
+                onChange={e => setMotivoLn(e.target.value)}
+                placeholder="Ej: Conducta agresiva, pelea..."
+                style={inp}
+                autoFocus
+              />
+            </div>
+            <div style={{ fontSize: 11, color: "#5a4a30", marginBottom: 20 }}>
+              ⚠️ Solo el administrador puede remover personas de la lista negra.
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={agregarAListaNegra} disabled={cargandoLn}
+                style={{ ...btn("danger"), flex: 1, opacity: cargandoLn ? 0.6 : 1 }}>
+                {cargandoLn ? "Agregando..." : "🚫 Agregar a lista negra"}
+              </button>
+              <button onClick={() => { setModalListaNegra(null); setMotivoLn(""); }} style={btn("ghost")}>Cancelar</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {reservaAEliminar && (
