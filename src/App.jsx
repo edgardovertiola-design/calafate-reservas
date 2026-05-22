@@ -133,87 +133,176 @@ function parseQR(raw) {
   } catch (e) { return null; }
 }
 
-// ── COMPONENTE SCANNER QR ────────────────────────────────────────────────────
+// ── COMPONENTE SCANNER QR (ZXing nativo) ─────────────────────────────────────
 function QRScanner({ onResult, onClose }) {
-  const scannerRef = useRef(null);
-  const procesandoRef = useRef(false); // evita doble disparo
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const animRef = useRef(null);
+  const procesandoRef = useRef(false);
   const [error, setError] = useState("");
   const [escaneado, setEscaneado] = useState(false);
+  const [linterna, setLinterna] = useState(false);
+  const [trackRef] = useState({ current: null });
 
   useEffect(() => {
     let mounted = true;
-    const startScanner = async () => {
-      if (!window.Html5Qrcode) {
-        setError("Librería de scanner no cargada. Recarga la página.");
-        return;
-      }
+
+    const cargarZXing = () => new Promise((resolve, reject) => {
+      if (window.ZXing) return resolve(window.ZXing);
+      const s = document.createElement("script");
+      s.src = "https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js";
+      s.onload = () => resolve(window.ZXing);
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+
+    const iniciar = async () => {
       try {
-        const scanner = new window.Html5Qrcode("qr-reader-cedula");
-        scannerRef.current = scanner;
-        await scanner.start(
-          { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 250, height: 250 } },
-          async (decoded) => {
-            // Evitar procesamiento múltiple
-            if (!mounted || procesandoRef.current) return;
-            const data = parseQR(decoded);
-            if (!data) return;
-            procesandoRef.current = true;
-            setEscaneado(true);
-            // Detener cámara limpiamente antes de notificar
+        const ZXing = await cargarZXing();
+        if (!mounted) return;
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "environment",
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          }
+        });
+        if (!mounted) { stream.getTracks().forEach(t => t.stop()); return; }
+
+        streamRef.current = stream;
+        const track = stream.getVideoTracks()[0];
+        trackRef.current = track;
+
+        const video = videoRef.current;
+        video.srcObject = stream;
+        await video.play();
+
+        // Intentar encender linterna automáticamente en poca luz
+        try {
+          await track.applyConstraints({ advanced: [{ torch: true }] });
+          setLinterna(true);
+        } catch (_) {}
+
+        // Canvas para decodificar frames
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        const hints = new Map();
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        const reader = new ZXing.BrowserQRCodeReader(hints);
+
+        const scanFrame = () => {
+          if (!mounted || procesandoRef.current) return;
+          if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
             try {
-              await scanner.stop();
-              await scanner.clear();
+              const result = reader.decodeFromCanvas(canvas);
+              if (result && !procesandoRef.current) {
+                procesandoRef.current = true;
+                const data = parseQR(result.getText());
+                if (data) {
+                  setEscaneado(true);
+                  detener();
+                  setTimeout(() => { if (mounted) onResult(data); }, 150);
+                  return;
+                } else {
+                  procesandoRef.current = false;
+                }
+              }
             } catch (_) {}
-            scannerRef.current = null;
-            // Pequeño delay para que React limpie el DOM del scanner
-            setTimeout(() => {
-              if (mounted) onResult(data);
-            }, 100);
-          },
-          () => {}
-        );
+          }
+          animRef.current = requestAnimationFrame(scanFrame);
+        };
+        animRef.current = requestAnimationFrame(scanFrame);
+
       } catch (e) {
-        if (mounted) setError("No se pudo acceder a la cámara. Verifica los permisos.");
+        if (mounted) setError("No se pudo acceder a la cámara. Verifica los permisos del navegador.");
       }
     };
-    startScanner();
-    return () => {
-      mounted = false;
-      if (scannerRef.current) {
-        scannerRef.current.stop().catch(() => {});
-        scannerRef.current = null;
-      }
+
+    const detener = () => {
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
     };
+
+    iniciar();
+    return () => { mounted = false; detener(); };
   }, []);
 
+  const toggleLinterna = async () => {
+    const track = trackRef.current;
+    if (!track) return;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: !linterna }] });
+      setLinterna(l => !l);
+    } catch (_) {}
+  };
+
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 16 }}>
-      <div style={{ background: "#15120a", border: "1px solid #3a2e1a", borderRadius: 12, padding: 24, width: "100%", maxWidth: 400 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+    <div style={{ position: "fixed", inset: 0, background: "#000", display: "flex", flexDirection: "column", zIndex: 200 }}>
+      {/* Video fullscreen */}
+      <video ref={videoRef} playsInline muted style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+
+      {/* Overlay con marco de enfoque */}
+      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
+        {/* Top bar */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", background: "linear-gradient(to bottom, rgba(0,0,0,0.7), transparent)", zIndex: 10 }}>
           <div>
-            <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase" }}>Escáner de Cédula</div>
-            <div style={{ fontSize: 13, color: "#7a6a50", marginTop: 3 }}>Apunta al QR de la cédula chilena</div>
+            <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase" }}>Escanear Cédula</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>Apunta el QR al centro del marco</div>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "1px solid #3a2e1a", borderRadius: 6, color: "#7a6a50", fontSize: 18, padding: "4px 10px", cursor: "pointer" }}>✕</button>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={toggleLinterna} title="Linterna" style={{ background: linterna ? "#b8914a" : "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, color: linterna ? "#0f0e0c" : "#fff", fontSize: 20, padding: "8px 12px", cursor: "pointer" }}>
+              🔦
+            </button>
+            <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, color: "#fff", fontSize: 18, padding: "8px 12px", cursor: "pointer" }}>✕</button>
+          </div>
         </div>
-        {error ? (
-          <div style={{ background: "#2a1010", border: "1px solid #5a2020", color: "#cb7e7e", padding: "14px", borderRadius: 6, fontSize: 13, textAlign: "center" }}>
-            {error}
+
+        {/* Marco de escaneo centrado */}
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {escaneado ? (
+            <div style={{ background: "rgba(10,40,10,0.9)", border: "2px solid #7ecb7e", borderRadius: 16, padding: "32px 40px", textAlign: "center" }}>
+              <div style={{ fontSize: 48, marginBottom: 10 }}>✅</div>
+              <div style={{ fontSize: 15, color: "#7ecb7e", fontFamily: "'Georgia', serif" }}>¡Cédula detectada!</div>
+            </div>
+          ) : error ? (
+            <div style={{ background: "rgba(40,10,10,0.9)", border: "2px solid #cb7e7e", borderRadius: 16, padding: "24px 32px", textAlign: "center", maxWidth: 300 }}>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>📷</div>
+              <div style={{ fontSize: 13, color: "#cb7e7e", fontFamily: "'Georgia', serif" }}>{error}</div>
+            </div>
+          ) : (
+            <div style={{ position: "relative", width: 260, height: 260 }}>
+              {/* Marco con esquinas */}
+              <div style={{ position: "absolute", inset: 0, border: "2px solid rgba(255,255,255,0.2)", borderRadius: 12 }} />
+              {[["0","0","tl"],["0","auto","tr"],["auto","0","bl"],["auto","auto","br"]].map(([t,r,k]) => (
+                <div key={k} style={{
+                  position: "absolute",
+                  top: t === "0" ? 0 : "auto", bottom: t === "auto" ? 0 : "auto",
+                  left: r === "0" ? 0 : "auto", right: r === "auto" ? 0 : "auto",
+                  width: 28, height: 28,
+                  borderTop: (k==="tl"||k==="tr") ? "3px solid #b8914a" : "none",
+                  borderBottom: (k==="bl"||k==="br") ? "3px solid #b8914a" : "none",
+                  borderLeft: (k==="tl"||k==="bl") ? "3px solid #b8914a" : "none",
+                  borderRight: (k==="tr"||k==="br") ? "3px solid #b8914a" : "none",
+                  borderRadius: k==="tl"?"8px 0 0 0":k==="tr"?"0 8px 0 0":k==="bl"?"0 0 0 8px":"0 0 8px 0",
+                }} />
+              ))}
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", textAlign: "center", letterSpacing: 1 }}>QR aquí</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom hint */}
+        <div style={{ padding: "20px", background: "linear-gradient(to top, rgba(0,0,0,0.7), transparent)", textAlign: "center" }}>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>
+            {linterna ? "💡 Linterna encendida" : "Toca 🔦 si hay poca luz"}
           </div>
-        ) : escaneado ? (
-          <div style={{ background: "#0a2010", border: "1px solid #2a6a2a", borderRadius: 8, padding: "32px 20px", textAlign: "center" }}>
-            <div style={{ fontSize: 40, marginBottom: 10 }}>✅</div>
-            <div style={{ fontSize: 14, color: "#7ecb7e" }}>¡Cédula detectada!</div>
-            <div style={{ fontSize: 12, color: "#5a4a30", marginTop: 6 }}>Procesando...</div>
-          </div>
-        ) : (
-          <div style={{ background: "#000", borderRadius: 8, overflow: "hidden" }}>
-            <div id="qr-reader-cedula" style={{ width: "100%" }} />
-          </div>
-        )}
-        <div style={{ marginTop: 14, fontSize: 12, color: "#5a4a30", textAlign: "center" }}>
-          {escaneado ? "Cerrando cámara..." : "El QR se detecta automáticamente al enfocarlo"}
         </div>
       </div>
     </div>
@@ -1288,14 +1377,7 @@ export default function Root() {
     return () => { clearTimeout(timer); eventos.forEach(e => window.removeEventListener(e, resetTimer)); };
   }, [sesion]);
 
-  // Cargar html5-qrcode dinámicamente cuando se necesita
-  useEffect(() => {
-    if (!window.Html5Qrcode) {
-      const script = document.createElement("script");
-      script.src = "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js";
-      document.head.appendChild(script);
-    }
-  }, []);
+  // ZXing se carga dinámicamente dentro del QRScanner cuando se necesita
 
   const handleLogin = (usuario) => {
     setSesion(usuario); setSector(null);
