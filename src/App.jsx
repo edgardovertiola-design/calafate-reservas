@@ -220,7 +220,7 @@ function parseQRCedula(url) {
   } catch { return null; }
 }
 
-// ── NUEVO: Componente QRScanner fullscreen con ZXing ─────────────────────────
+// ── NUEVO: Componente QRScanner fullscreen con jsQR ──────────────────────────
 function QRScanner({ onResult, onClose }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -230,76 +230,83 @@ function QRScanner({ onResult, onClose }) {
   const [error, setError] = useState("");
   const [escaneado, setEscaneado] = useState(false);
   const [linterna, setLinterna] = useState(false);
+  const [estado, setEstado] = useState("Iniciando cámara...");
 
   useEffect(() => {
     let mounted = true;
 
-    const cargarZXing = () => new Promise((resolve, reject) => {
-      if (window.ZXing) return resolve(window.ZXing);
+    const cargarJsQR = () => new Promise((resolve, reject) => {
+      if (window.jsQR) return resolve(window.jsQR);
       const s = document.createElement("script");
-      s.src = "https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js";
-      s.onload = () => resolve(window.ZXing);
-      s.onerror = reject;
+      s.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js";
+      s.onload = () => { if (window.jsQR) resolve(window.jsQR); else reject(new Error("jsQR no cargó")); };
+      s.onerror = () => reject(new Error("Error cargando jsQR"));
       document.head.appendChild(s);
     });
 
     const iniciar = async () => {
       try {
-        const ZXing = await cargarZXing();
+        const jsQR = await cargarJsQR();
         if (!mounted) return;
+
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
         });
         if (!mounted) { stream.getTracks().forEach(t => t.stop()); return; }
+
         streamRef.current = stream;
         trackRef.current = stream.getVideoTracks()[0];
         const video = videoRef.current;
         video.srcObject = stream;
         await video.play();
+
+        if (mounted) setEstado("Apunta al QR de la cédula");
+
         // Intentar linterna automática
         try {
           await trackRef.current.applyConstraints({ advanced: [{ torch: true }] });
           if (mounted) setLinterna(true);
         } catch (_) {}
+
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        const hints = new Map();
-        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-        const reader = new ZXing.BrowserQRCodeReader(hints);
+
         const scanFrame = () => {
           if (!mounted || procesandoRef.current) return;
-          if (video.readyState === video.HAVE_ENOUGH_DATA) {
+          if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0);
-            try {
-              const result = reader.decodeFromCanvas(canvas);
-              if (result && !procesandoRef.current) {
-                procesandoRef.current = true;
-                const data = parseQRCedula(result.getText());
-                if (data) {
-                  setEscaneado(true);
-                  detener();
-                  setTimeout(() => { if (mounted) onResult(data); }, 150);
-                  return;
-                } else {
-                  procesandoRef.current = false;
-                }
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: "dontInvert",
+            });
+            if (code && !procesandoRef.current) {
+              procesandoRef.current = true;
+              const data = parseQRCedula(code.data);
+              if (data) {
+                if (mounted) setEscaneado(true);
+                detener();
+                setTimeout(() => { if (mounted) onResult(data); }, 200);
+                return;
+              } else {
+                // QR encontrado pero no es cédula
+                procesandoRef.current = false;
               }
-            } catch (_) {}
+            }
           }
           animRef.current = requestAnimationFrame(scanFrame);
         };
         animRef.current = requestAnimationFrame(scanFrame);
+
       } catch (e) {
-        if (mounted) setError("No se pudo acceder a la cámara. Verifica los permisos del navegador.");
+        if (mounted) setError(e.message.includes("jsQR") ? "Error cargando el lector de QR. Verifica tu conexión." : "No se pudo acceder a la cámara. Verifica los permisos.");
       }
     };
 
     const detener = () => {
       if (animRef.current) cancelAnimationFrame(animRef.current);
-      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
+      if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
     };
 
     iniciar();
@@ -363,7 +370,8 @@ function QRScanner({ onResult, onClose }) {
         </div>
         {/* Bottom hint */}
         <div style={{ padding: "20px", background: "linear-gradient(to top, rgba(0,0,0,0.75), transparent)", textAlign: "center" }}>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", marginBottom: 4 }}>{estado}</div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>
             {linterna ? "💡 Linterna encendida" : "Toca 🔦 si hay poca luz"}
           </div>
         </div>
