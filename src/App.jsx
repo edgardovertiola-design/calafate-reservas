@@ -198,6 +198,18 @@ function estaEnListaNegra(cliente, listaNegra) {
   }) || null;
 }
 
+function limpiarTextoQR(texto) {
+  if (!texto) return "";
+  // Reemplazar caracteres mal codificados comunes en QR de cédulas chilenas
+  return texto
+    .replace(/\?/g, "")
+    .replace(/Ã¡/g, "á").replace(/Ã©/g, "é").replace(/Ã­/g, "í").replace(/Ã³/g, "ó").replace(/Ãº/g, "ú")
+    .replace(/Ã/g, "Á").replace(/É/g, "É").replace(/Í/g, "Í").replace(/Ó/g, "Ó").replace(/Ú/g, "Ú")
+    .replace(/Ã±/g, "ñ").replace(/Ã'/g, "Ñ")
+    .replace(/�/g, "")
+    .trim();
+}
+
 function parseQRCedula(url) {
   try {
     const u = new URL(url.trim());
@@ -210,11 +222,12 @@ function parseQRCedula(url) {
     if (!run || !mrz) return null;
     let nombre = "", apellido = "";
     if (name) {
-      const partes = name.trim().split(/\s+/);
+      const nombreLimpio = limpiarTextoQR(name);
+      const partes = nombreLimpio.trim().split(/\s+/);
       nombre = partes[0] || "";
       apellido = partes.slice(1).join(" ") || "";
     }
-    return { run, nombre, apellido };
+    return { run, nombre: limpiarTextoQR(nombre), apellido: limpiarTextoQR(apellido) };
   } catch { return null; }
 }
 
