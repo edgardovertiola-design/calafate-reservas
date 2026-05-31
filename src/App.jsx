@@ -933,6 +933,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   const [scannerAbierto, setScannerAbierto] = useState(false);
   const [reservaEditando, setReservaEditando] = useState(null);
   const [editForm, setEditForm] = useState({ mesa_id: "", participantes: [] });
+  const [scannerEditando, setScannerEditando] = useState(false);
   const [modalListaNegra, setModalListaNegra] = useState(null);
   const [motivoLn, setMotivoLn] = useState("");
   const [cargandoLn, setCargandoLn] = useState(false);
@@ -1067,6 +1068,13 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     setMotivoLn("");
     cargarListaNegra();
     flash(`${persona.nombre} ${persona.apellido} agregado a lista negra.`);
+  };
+
+  const onScanResultEdicion = (data) => {
+    setScannerEditando(false);
+    if (editForm.participantes.some(p => normalizarRut(p.rut) === normalizarRut(data.run))) return;
+    if (editForm.participantes.length >= 7) return;
+    setEditForm(f => ({ ...f, participantes: [...f.participantes, { nombre: data.nombre || "", apellido: data.apellido || "", rut: data.run }] }));
   };
 
   const abrirEdicion = (r) => {
@@ -1392,6 +1400,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
       </div>
 
       {scannerAbierto && <QRScanner onResult={onScanResult} onClose={() => setScannerAbierto(false)} />}
+      {scannerEditando && <QRScanner onResult={onScanResultEdicion} onClose={() => setScannerEditando(false)} />}
 
       {reservaEditando && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 150, padding: 16, overflowY: "auto" }}>
@@ -1434,10 +1443,16 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                   </div>
                 ))}
                 {editForm.participantes.length < 7 && (
-                  <button onClick={() => setEditForm(f => ({ ...f, participantes: [...f.participantes, { nombre: "", apellido: "", rut: "" }] }))}
-                    style={{ background: "none", border: "1px dashed #3a2e1a", borderRadius: 6, color: "#7a6a50", padding: "8px", fontSize: 13, cursor: "pointer", fontFamily: "'Georgia', serif" }}>
-                    + Agregar participante
-                  </button>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => setEditForm(f => ({ ...f, participantes: [...f.participantes, { nombre: "", apellido: "", rut: "" }] }))}
+                      style={{ flex: 1, background: "none", border: "1px dashed #3a2e1a", borderRadius: 6, color: "#7a6a50", padding: "8px", fontSize: 13, cursor: "pointer", fontFamily: "'Georgia', serif" }}>
+                      + Agregar participante
+                    </button>
+                    <button onClick={() => setScannerEditando(true)}
+                      style={{ background: "#2a1e0a", border: "1px solid #b8914a", borderRadius: 6, color: "#b8914a", padding: "8px 14px", fontSize: 13, cursor: "pointer", fontFamily: "'Georgia', serif" }}>
+                      📷 Escanear
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
