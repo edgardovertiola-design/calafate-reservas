@@ -200,21 +200,12 @@ function estaEnListaNegra(cliente, listaNegra) {
 
 function limpiarTextoQR(texto) {
   if (!texto) return "";
+  // Reemplazar caracteres mal codificados comunes en QR de cédulas chilenas
   return texto
+    .replace(/\?/g, "")
     .replace(/Ã¡/g, "á").replace(/Ã©/g, "é").replace(/Ã­/g, "í").replace(/Ã³/g, "ó").replace(/Ãº/g, "ú")
+    .replace(/Ã/g, "Á").replace(/É/g, "É").replace(/Í/g, "Í").replace(/Ó/g, "Ó").replace(/Ú/g, "Ú")
     .replace(/Ã±/g, "ñ").replace(/Ã'/g, "Ñ")
-    .replace(/E�/g, "É").replace(/e�/g, "é")
-    .replace(/A�/g, "Á").replace(/a�/g, "á")
-    .replace(/I�/g, "Í").replace(/i�/g, "í")
-    .replace(/O�/g, "Ó").replace(/o�/g, "ó")
-    .replace(/U�/g, "Ú").replace(/u�/g, "ú")
-    .replace(/N�/g, "Ñ").replace(/n�/g, "ñ")
-    .replace(/E[?]/g, "É").replace(/e[?]/g, "é")
-    .replace(/A[?]/g, "Á").replace(/a[?]/g, "á")
-    .replace(/I[?]/g, "Í").replace(/i[?]/g, "í")
-    .replace(/O[?]/g, "Ó").replace(/o[?]/g, "ó")
-    .replace(/U[?]/g, "Ú").replace(/u[?]/g, "ú")
-    .replace(/N[?]/g, "Ñ").replace(/n[?]/g, "ñ")
     .replace(/�/g, "")
     .trim();
 }
