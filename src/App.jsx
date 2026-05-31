@@ -163,8 +163,7 @@ function normalizarRut(rut) {
 }
 
 function normalizarTexto(s) {
-  return (s || "").toLowerCase().trim()
-    .normalize("NFD").replace(/[̀-ͯ]/g, "");
+  return (s || "").toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
 function validarRut(rut) {
@@ -199,7 +198,6 @@ function estaEnListaNegra(cliente, listaNegra) {
   }) || null;
 }
 
-// ── NUEVO: Parser QR cédula chilena ──────────────────────────────────────────
 function parseQRCedula(url) {
   try {
     const u = new URL(url.trim());
@@ -220,7 +218,6 @@ function parseQRCedula(url) {
   } catch { return null; }
 }
 
-// ── NUEVO: Componente QRScanner fullscreen con jsQR ──────────────────────────
 function QRScanner({ onResult, onClose }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -232,7 +229,6 @@ function QRScanner({ onResult, onClose }) {
   const [linterna, setLinterna] = useState(false);
   const [estado, setEstado] = useState("Iniciando cámara...");
 
-  // Interceptar botón atrás de Android para cerrar el scanner
   useEffect(() => {
     window.history.pushState({ scanner: true }, "");
     const handlePop = () => onClose();
@@ -256,29 +252,22 @@ function QRScanner({ onResult, onClose }) {
       try {
         const jsQR = await cargarJsQR();
         if (!mounted) return;
-
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
         });
         if (!mounted) { stream.getTracks().forEach(t => t.stop()); return; }
-
         streamRef.current = stream;
         trackRef.current = stream.getVideoTracks()[0];
         const video = videoRef.current;
         video.srcObject = stream;
         await video.play();
-
         if (mounted) setEstado("Apunta al QR de la cédula");
-
-        // Intentar linterna automática
         try {
           await trackRef.current.applyConstraints({ advanced: [{ torch: true }] });
           if (mounted) setLinterna(true);
         } catch (_) {}
-
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d", { willReadFrequently: true });
-
         const scanFrame = () => {
           if (!mounted || procesandoRef.current) return;
           if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
@@ -286,9 +275,7 @@ function QRScanner({ onResult, onClose }) {
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height, {
-              inversionAttempts: "dontInvert",
-            });
+            const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
             if (code && !procesandoRef.current) {
               procesandoRef.current = true;
               const data = parseQRCedula(code.data);
@@ -298,7 +285,6 @@ function QRScanner({ onResult, onClose }) {
                 setTimeout(() => { if (mounted) onResult(data); }, 200);
                 return;
               } else {
-                // QR encontrado pero no es cédula
                 procesandoRef.current = false;
               }
             }
@@ -306,7 +292,6 @@ function QRScanner({ onResult, onClose }) {
           animRef.current = requestAnimationFrame(scanFrame);
         };
         animRef.current = requestAnimationFrame(scanFrame);
-
       } catch (e) {
         if (mounted) setError(e.message.includes("jsQR") ? "Error cargando el lector de QR. Verifica tu conexión." : "No se pudo acceder a la cámara. Verifica los permisos.");
       }
@@ -333,7 +318,6 @@ function QRScanner({ onResult, onClose }) {
     <div style={{ position: "fixed", inset: 0, background: "#000", display: "flex", flexDirection: "column", zIndex: 200 }}>
       <video ref={videoRef} playsInline muted style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
-        {/* Top bar */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", background: "linear-gradient(to bottom, rgba(0,0,0,0.75), transparent)" }}>
           <div>
             <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase" }}>Escanear Cédula</div>
@@ -344,7 +328,6 @@ function QRScanner({ onResult, onClose }) {
             <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, color: "#fff", fontSize: 18, padding: "8px 12px", cursor: "pointer" }}>✕</button>
           </div>
         </div>
-        {/* Marco central */}
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
           {escaneado ? (
             <div style={{ background: "rgba(10,40,10,0.9)", border: "2px solid #7ecb7e", borderRadius: 16, padding: "32px 40px", textAlign: "center" }}>
@@ -376,20 +359,15 @@ function QRScanner({ onResult, onClose }) {
             </div>
           )}
         </div>
-        {/* Bottom hint */}
         <div style={{ padding: "20px", background: "linear-gradient(to top, rgba(0,0,0,0.75), transparent)", textAlign: "center" }}>
           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", marginBottom: 4 }}>{estado}</div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>
-            {linterna ? "💡 Linterna encendida" : "Toca 🔦 si hay poca luz"}
-          </div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>{linterna ? "💡 Linterna encendida" : "Toca 🔦 si hay poca luz"}</div>
         </div>
       </div>
     </div>
   );
 }
 
-
-// ── NUEVO: Tarjeta editable por persona escaneada ────────────────────────────
 function TarjetaPersona({ persona, idx, onEditar, onEliminar }) {
   const [editando, setEditando] = useState(false);
   const [nombre, setNombre] = useState(persona.nombre || "");
@@ -403,18 +381,11 @@ function TarjetaPersona({ persona, idx, onEditar, onEliminar }) {
   const sinNombre = !persona.nombre && !persona.apellido;
 
   return (
-    <div style={{
-      background: "#0f0c06",
-      border: `1px solid ${idx === 0 ? "#b8914a" : "#2a2010"}`,
-      borderLeft: `3px solid ${idx === 0 ? "#b8914a" : "#3a2e1a"}`,
-      borderRadius: 6, padding: "10px 14px",
-    }}>
+    <div style={{ background: "#0f0c06", border: `1px solid ${idx === 0 ? "#b8914a" : "#2a2010"}`, borderLeft: `3px solid ${idx === 0 ? "#b8914a" : "#3a2e1a"}`, borderRadius: 6, padding: "10px 14px" }}>
       {editando ? (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Nombre"
-            style={{ ...inp, flex: 1, minWidth: 80, padding: "6px 10px", fontSize: 13 }} />
-          <input value={apellido} onChange={e => setApellido(e.target.value)} placeholder="Apellido"
-            style={{ ...inp, flex: 1, minWidth: 80, padding: "6px 10px", fontSize: 13 }} />
+          <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Nombre" style={{ ...inp, flex: 1, minWidth: 80, padding: "6px 10px", fontSize: 13 }} />
+          <input value={apellido} onChange={e => setApellido(e.target.value)} placeholder="Apellido" style={{ ...inp, flex: 1, minWidth: 80, padding: "6px 10px", fontSize: 13 }} />
           <button onClick={confirmar} style={{ ...btn("gold"), padding: "6px 14px", fontSize: 12 }}>✓</button>
           <button onClick={() => setEditando(false)} style={{ ...btn("ghost"), padding: "6px 10px", fontSize: 12 }}>✕</button>
         </div>
@@ -433,10 +404,8 @@ function TarjetaPersona({ persona, idx, onEditar, onEliminar }) {
             </div>
           </div>
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-            <button onClick={() => { setNombre(persona.nombre || ""); setApellido(persona.apellido || ""); setEditando(true); }}
-              style={{ background: "none", border: "1px solid #3a2e1a", borderRadius: 4, color: "#7a6a50", fontSize: 13, padding: "4px 9px", cursor: "pointer" }}>✏</button>
-            <button onClick={() => onEliminar(idx)}
-              style={{ background: "none", border: "1px solid #4a2020", borderRadius: 4, color: "#9a5050", fontSize: 13, padding: "4px 9px", cursor: "pointer" }}>✕</button>
+            <button onClick={() => { setNombre(persona.nombre || ""); setApellido(persona.apellido || ""); setEditando(true); }} style={{ background: "none", border: "1px solid #3a2e1a", borderRadius: 4, color: "#7a6a50", fontSize: 13, padding: "4px 9px", cursor: "pointer" }}>✏</button>
+            <button onClick={() => onEliminar(idx)} style={{ background: "none", border: "1px solid #4a2020", borderRadius: 4, color: "#9a5050", fontSize: 13, padding: "4px 9px", cursor: "pointer" }}>✕</button>
           </div>
         </div>
       )}
@@ -553,9 +522,9 @@ function Login({ onLogin }) {
   return (
     <div style={{ minHeight: "100vh", background: "#0a0806", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Georgia', serif", padding: 16 }}>
       <div style={{ width: "100%", maxWidth: 380, textAlign: "center" }}>
-        <div style={{ fontSize: 11, letterSpacing: 8, color: "#b8914a", textTransform: "uppercase", marginBottom: 12 }}>Sistema de Reservas</div>
-        <h1 style={{ fontSize: 34, fontWeight: "normal", color: "#f5e6c8", margin: "0 0 4px", letterSpacing: 2 }}>🎶 Calafate</h1>
-        <div style={{ fontSize: 12, color: "#4a3a22", marginBottom: 44, letterSpacing: 4, textTransform: "uppercase" }}>Discoteca</div>
+        <div style={{ fontSize: 11, letterSpacing: 8, color: "#b8914a", textTransform: "uppercase", marginBottom: 12 }}>Sistema de Seguridad de Reservas</div>
+        <h1 style={{ fontSize: 34, fontWeight: "normal", color: "#f5e6c8", margin: "0 0 4px", letterSpacing: 2 }}>🔒 Reserva Segura</h1>
+        <div style={{ fontSize: 12, color: "#4a3a22", marginBottom: 44, letterSpacing: 4, textTransform: "uppercase" }}>Sistema de Acceso</div>
         <div style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 8, padding: 32 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <Field label="Usuario"><input value={usuario} onChange={e => { setUsuario(e.target.value); setError(""); }} placeholder="Tu usuario" style={inp} onKeyDown={e => e.key === "Enter" && handleLogin()} /></Field>
@@ -616,7 +585,8 @@ function AdminPanel() {
   const [cargandoResumen, setCargandoResumen] = useState(false);
   const [fechaResumen, setFechaResumen] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 6);
-    return d.toISOString().split("T")[0];
+    const y = d.getFullYear(); const m = String(d.getMonth()+1).padStart(2,"0"); const dd = String(d.getDate()).padStart(2,"0");
+    return `${y}-${m}-${dd}`;
   });
 
   const flash = (t) => { setMsg(t); setTimeout(() => setMsg(""), 3000); };
@@ -628,10 +598,11 @@ function AdminPanel() {
   useEffect(() => { if (tab === "resumen") cargarResumen(fechaResumen); }, [tab, fechaResumen]);
 
   const cargarUsuarios = async () => { setCargando(true); const data = await db.get("usuarios", "select=*&order=id.asc"); setUsuarios(data); setCargando(false); };
-  const cargarListaNegra = async () => { const data = await db.get("lista_negra", "select=*&order=id.desc"); setListaNegra(data); };
-  const cargarIntentos = async () => { setCargandoIntentos(true); const data = await db.get("intentos_bloqueados", "select=*&order=fecha_intento.desc"); setIntentos(data); setCargandoIntentos(false); };
+  const cargarListaNegra = async () => { const data = await db.get("lista_negra", "select=*&order=id.desc"); setListaNegra(Array.isArray(data) ? data : []); };
+  const cargarIntentos = async () => { setCargandoIntentos(true); const data = await db.get("intentos_bloqueados", "select=*&order=fecha_intento.desc"); setIntentos(Array.isArray(data) ? data : []); setCargandoIntentos(false); };
   const marcarVisto = async (id) => { await db.patch("intentos_bloqueados", id, { visto: true }); cargarIntentos(); };
   const cargarLog = async () => { setCargandoLog(true); const data = await db.get("log_actividad", "select=*&order=fecha_accion.desc&limit=100"); setLogActividad(Array.isArray(data) ? data : []); setCargandoLog(false); };
+
   const sumarDias = (fechaStr, dias) => {
     const partes = fechaStr.split("-");
     const d = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]));
@@ -639,6 +610,7 @@ function AdminPanel() {
     const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, "0"); const dd = String(d.getDate()).padStart(2, "0");
     return `${y}-${m}-${dd}`;
   };
+
   const cargarResumen = async (desde) => {
     setCargandoResumen(true);
     const hasta = sumarDias(desde, 6);
@@ -646,6 +618,7 @@ function AdminPanel() {
     setResumen(Array.isArray(data) ? data : []);
     setCargandoResumen(false);
   };
+
   const guardar = async () => {
     if (!form.nombre.trim()) return setError("El nombre es obligatorio.");
     if (!form.usuario.trim()) return setError("El usuario es obligatorio.");
@@ -654,8 +627,10 @@ function AdminPanel() {
     else { await db.post("usuarios", { nombre: form.nombre.trim(), usuario: form.usuario.trim(), password: form.password.trim(), activo: true }); flash("Garzón creado."); }
     setForm({ nombre: "", usuario: "", password: "" }); setEditando(null); setError(""); cargarUsuarios();
   };
+
   const toggleActivo = async (u) => { await db.patch("usuarios", u.id, { activo: !u.activo }); cargarUsuarios(); };
   const eliminar = async (u) => { await db.delete("usuarios", u.id); setConfirmarEliminar(null); flash("Usuario eliminado."); cargarUsuarios(); };
+
   const guardarAdmin = async () => {
     if (!adminForm.usuario.trim()) return setAdminError("El usuario es obligatorio.");
     if (!adminForm.password.trim()) return setAdminError("La contraseña es obligatoria.");
@@ -665,8 +640,9 @@ function AdminPanel() {
       if (existing && existing.length > 0) await db.patch("admin_config", existing[0].id, { usuario: adminForm.usuario.trim(), password: adminForm.password.trim() });
       else await db.post("admin_config", { usuario: adminForm.usuario.trim(), password: adminForm.password.trim() });
       setAdminForm({ usuario: "", password: "", confirmar: "" }); setAdminError(""); flash("Credenciales actualizadas.");
-    } catch { setAdminError("Error al guardar. Verifica que la tabla admin_config exista en Supabase."); }
+    } catch { setAdminError("Error al guardar."); }
   };
+
   const agregarListaNegra = async () => {
     if (!lnForm.nombre.trim()) return setLnError("El nombre es obligatorio.");
     if (!lnForm.apellido.trim()) return setLnError("El apellido es obligatorio.");
@@ -674,7 +650,9 @@ function AdminPanel() {
     await db.post("lista_negra", { nombre: lnForm.nombre.trim(), apellido: lnForm.apellido.trim(), rut: lnForm.rut.trim(), motivo: lnForm.motivo.trim() });
     setLnForm({ nombre: "", apellido: "", rut: "", motivo: "" }); setLnError(""); flash("Persona agregada a lista negra."); cargarListaNegra();
   };
+
   const eliminarListaNegra = async (ln) => { await db.delete("lista_negra", ln.id); setConfirmarEliminarLn(null); flash("Persona removida de lista negra."); cargarListaNegra(); };
+
   const tabStyle = (t) => ({ background: "none", border: "none", borderBottom: tab === t ? "2px solid #b8914a" : "2px solid transparent", color: tab === t ? "#f5e6c8" : "#7a6a50", padding: "8px 14px", cursor: "pointer", fontFamily: "'Georgia', serif", fontSize: 13 });
   const intentosNuevos = intentos.filter(i => !i.visto).length;
 
@@ -952,40 +930,27 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   const [form, setForm] = useState({ fecha: today(), mesa_id: "", nota: "Reserva" });
   const [error, setError] = useState("");
   const [exitoMsg, setExitoMsg] = useState("");
-  // NUEVO: estado scanner y personas escaneadas
   const [scannerAbierto, setScannerAbierto] = useState(false);
-  const [modalListaNegra, setModalListaNegra] = useState(null); // { persona, reservaId }
+  const [modalListaNegra, setModalListaNegra] = useState(null);
   const [motivoLn, setMotivoLn] = useState("");
   const [cargandoLn, setCargandoLn] = useState(false);
-  const [personas, setPersonas] = useState([]); // personas escaneadas por QR
+  const [personas, setPersonas] = useState([]);
 
   const flash = (t) => { setExitoMsg(t); setTimeout(() => setExitoMsg(""), 3000); };
 
-  // Interceptar botón atrás de Android para navegar dentro de la app
   useEffect(() => {
-    const handlePop = (e) => {
-      if (scannerAbierto) {
-        setScannerAbierto(false);
-        window.history.pushState(null, "");
-        return;
-      }
-      if (vista === "formulario" || vista === "mapa" || vista === "admin") {
-        setVista("dia");
-        window.history.pushState(null, "");
-      }
+    const handlePop = () => {
+      if (scannerAbierto) { setScannerAbierto(false); window.history.pushState(null, ""); return; }
+      if (vista === "formulario" || vista === "mapa" || vista === "admin") { setVista("dia"); window.history.pushState(null, ""); }
     };
     window.addEventListener("popstate", handlePop);
     return () => window.removeEventListener("popstate", handlePop);
   }, [vista, scannerAbierto]);
 
-  // Agregar entrada al historial al cambiar de vista
-  useEffect(() => {
-    if (vista !== "dia") window.history.pushState({ vista }, "");
-  }, [vista]);
-
+  useEffect(() => { if (vista !== "dia") window.history.pushState({ vista }, ""); }, [vista]);
   useEffect(() => { cargarReservas(); cargarListaNegra(); }, [fechaSeleccionada]);
 
-  const cargarReservas = async () => { setCargando(true); const data = await db.get("reservas", `fecha=eq.${fechaSeleccionada}&select=*&order=nombre.asc`); setReservas(data); setCargando(false); };
+  const cargarReservas = async () => { setCargando(true); const data = await db.get("reservas", `fecha=eq.${fechaSeleccionada}&select=*&order=nombre.asc`); setReservas(Array.isArray(data) ? data : []); setCargando(false); };
   const cargarListaNegra = async () => { const data = await db.get("lista_negra", "select=*"); setListaNegra(Array.isArray(data) ? data : []); };
 
   const reservasPorSector = useMemo(() => sesion.rol === "admin" ? reservas : reservas.filter(r => { const mesa = MESAS.find(m => m.id === r.mesa_id); return mesa?.zona === sectorSesion; }), [reservas, sesion.rol, sectorSesion]);
@@ -1003,22 +968,15 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
 
   const mesasDisponibles = () => { const ocupadas = reservas.map(r => r.mesa_id); return MESAS.filter(m => !ocupadas.includes(m.id)); };
 
-  // NUEVO: cuando el scanner detecta una cédula, agrega tarjeta a lista
   const onScanResult = (data) => {
     setScannerAbierto(false);
-    // Verificar duplicado
-    if (personas.some(p => p.rut.replace(/[^\dk]/gi, "") === data.run.replace(/[^\dk]/gi, ""))) return;
+    if (personas.some(p => normalizarRut(p.rut) === normalizarRut(data.run))) return;
     if (personas.length >= 5) return;
     setPersonas(prev => [...prev, { nombre: data.nombre || "", apellido: data.apellido || "", rut: data.run }]);
   };
 
-  const editarPersona = (idx, nombre, apellido) => {
-    setPersonas(prev => prev.map((p, i) => i === idx ? { ...p, nombre, apellido } : p));
-  };
-
-  const eliminarPersona = (idx) => {
-    setPersonas(prev => prev.filter((_, i) => i !== idx));
-  };
+  const editarPersona = (idx, nombre, apellido) => { setPersonas(prev => prev.map((p, i) => i === idx ? { ...p, nombre, apellido } : p)); };
+  const eliminarPersona = (idx) => { setPersonas(prev => prev.filter((_, i) => i !== idx)); };
 
   const handlePasteCliente = async (texto) => {
     setTextoCliente(texto);
@@ -1026,10 +984,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     if (!texto.trim()) { setClientesParsed([]); return; }
     const clientes = parsearTodosClientes(texto);
     setClientesParsed(clientes);
-    if (clientes.length > 5) {
-      setError(`⚠️ Máximo 5 personas por mesa. Tienes ${clientes.length}.`);
-      return;
-    }
+    if (clientes.length > 5) { setError(`⚠️ Máximo 5 personas por mesa. Tienes ${clientes.length}.`); return; }
     const sinRut = clientes.filter(c => !c.rut || c.rut.trim() === "");
     const rutsInvalidos = clientes.filter(c => c.rut && c.rut.trim() !== "" && !validarRut(c.rut));
     if (sinRut.length > 0) {
@@ -1052,8 +1007,11 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     setError("");
   };
 
+  const registrarLog = async (accion, detalle) => {
+    try { await db.post("log_actividad", { accion, garzon: sesion.nombre, detalle }); } catch {}
+  };
+
   const handleSubmit = async () => {
-    // Usar personas escaneadas si existen, sino clientesParsed del textarea
     const listaFinal = personas.length > 0 ? personas : clientesParsed;
     if (listaFinal.length === 0) return setError("Escanea al menos una cédula o pega la lista de participantes.");
     const titular = listaFinal[0];
@@ -1068,34 +1026,27 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     const lnFinal = await db.get("lista_negra", "select=*");
     const lnFinalArray = Array.isArray(lnFinal) ? lnFinal : [];
     const bloqueadosFinal = listaFinal.map(c => ({ cliente: c, match: estaEnListaNegra(c, lnFinalArray) })).filter(x => x.match);
-    if (bloqueadosFinal.length > 0) setAlertaListaNegra(bloqueadosFinal);
     if (bloqueadosFinal.length > 0) {
+      setAlertaListaNegra(bloqueadosFinal);
       for (const x of bloqueadosFinal) {
-        await db.post("intentos_bloqueados", {
-          cliente_nombre: x.cliente.nombre, cliente_apellido: x.cliente.apellido,
-          cliente_rut: x.cliente.rut, garzon_nombre: sesion.nombre,
-          fecha_reserva: form.fecha, mesa_id: parseInt(form.mesa_id), visto: false,
-        });
+        await db.post("intentos_bloqueados", { cliente_nombre: x.cliente.nombre, cliente_apellido: x.cliente.apellido, cliente_rut: x.cliente.rut, garzon_nombre: sesion.nombre, fecha_reserva: form.fecha, mesa_id: parseInt(form.mesa_id), visto: false });
       }
       return setError(`🚫 Reserva bloqueada: ${bloqueadosFinal.map(x => `${x.cliente.nombre} ${x.cliente.apellido}`).join(", ")} está en lista negra. Se notificó al administrador.`);
     }
-    const mesa = MESAS.find(m => m.id === parseInt(form.mesa_id));
-    if (parseInt(form.personas) > mesa.capacidad) return setError(`Mesa ${mesa.id}: máximo ${mesa.capacidad} personas.`);
     const yaReservada = reservas.some(r => r.mesa_id === parseInt(form.mesa_id) && r.fecha === form.fecha);
     if (yaReservada) return setError(`La mesa ${form.mesa_id} ya tiene una reserva para esa noche.`);
     await db.post("reservas", {
       nombre: titular.nombre, apellido: titular.apellido, rut: titular.rut,
       fecha: form.fecha, hora: "23:30", personas: listaFinal.length,
       mesa_id: parseInt(form.mesa_id), nota: form.nota.trim(),
-      participantes: listaFinal.slice(1),
-      garzon: sesion.nombre,
+      participantes: listaFinal.slice(1), garzon: sesion.nombre,
     });
     const fechaReserva = form.fecha;
     setTextoCliente(""); setClientesParsed([]); setPersonas([]); setAlertaListaNegra([]);
     setForm({ fecha: today(), mesa_id: "", nota: "Reserva" });
     setCargando(true);
     const dataFresh = await db.get("reservas", `fecha=eq.${fechaReserva}&select=*&order=nombre.asc`);
-    setReservas(dataFresh);
+    setReservas(Array.isArray(dataFresh) ? dataFresh : []);
     setCargando(false);
     setFechaSeleccionada(fechaReserva);
     setVista("dia");
@@ -1107,22 +1058,13 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     if (!modalListaNegra) return;
     setCargandoLn(true);
     const { persona } = modalListaNegra;
-    await db.post("lista_negra", {
-      nombre: persona.nombre,
-      apellido: persona.apellido,
-      rut: persona.rut,
-      motivo: motivoLn.trim() || "Conducta inapropiada",
-    });
+    await db.post("lista_negra", { nombre: persona.nombre, apellido: persona.apellido, rut: persona.rut, motivo: motivoLn.trim() || "Conducta inapropiada" });
     await registrarLog("LISTA_NEGRA", `${persona.nombre} ${persona.apellido} (${persona.rut}) agregado por ${sesion.nombre}${motivoLn ? ` — ${motivoLn}` : ""}`);
     setCargandoLn(false);
     setModalListaNegra(null);
     setMotivoLn("");
     cargarListaNegra();
     flash(`${persona.nombre} ${persona.apellido} agregado a lista negra.`);
-  };
-
-  const registrarLog = async (accion, detalle) => {
-    try { await db.post("log_actividad", { accion, garzon: sesion.nombre, detalle }); } catch {}
   };
 
   const cancelarReserva = async () => {
@@ -1139,12 +1081,10 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     const filas = reservasFiltradas.map(r => {
       const mesa = MESAS.find(m => m.id === r.mesa_id);
       const participantes = Array.isArray(r.participantes) ? r.participantes : [];
-      const participantesHtml = participantes.length > 0
-        ? `<div style="margin-top:4px;padding-left:12px;font-size:11px;color:#555">${participantes.map((p, i) => `${i + 2}. ${p.nombre} ${p.apellido} — ${p.rut}`).join("<br/>")}</div>`
-        : "";
+      const participantesHtml = participantes.length > 0 ? `<div style="margin-top:4px;padding-left:12px;font-size:11px;color:#555">${participantes.map((p, i) => `${i + 2}. ${p.nombre} ${p.apellido} — ${p.rut}`).join("<br/>")}</div>` : "";
       return `<tr><td style="padding:8px;border-bottom:1px solid #ddd;font-weight:bold">${r.mesa_id}</td><td style="padding:8px;border-bottom:1px solid #ddd">${mesa?.zona || ""}</td><td style="padding:8px;border-bottom:1px solid #ddd"><strong>${r.nombre} ${r.apellido}</strong><br/><span style="font-size:11px;color:#666">${r.rut}</span>${participantesHtml}</td><td style="padding:8px;border-bottom:1px solid #ddd;text-align:center">${r.personas}</td><td style="padding:8px;border-bottom:1px solid #ddd;font-size:11px;color:#666">${r.nota || ""}</td><td style="padding:8px;border-bottom:1px solid #ddd;font-size:11px;color:#666">${r.garzon || ""}</td></tr>`;
     }).join("");
-    const html = `<html><head><meta charset="utf-8"><title>Reservas Calafate ${fechaSeleccionada}</title><style>body{font-family:Georgia,serif;padding:30px;color:#222}h1{font-size:22px;margin-bottom:4px}h2{font-size:14px;font-weight:normal;color:#666;margin-bottom:20px}table{width:100%;border-collapse:collapse}th{background:#1a1208;color:#f5e6c8;padding:10px 8px;text-align:left;font-size:12px;letter-spacing:1px;text-transform:uppercase}tr:nth-child(even){background:#f9f6f0}.footer{margin-top:20px;font-size:11px;color:#999}</style></head><body><h1>🎶 Calafate Discoteca</h1><h2>Reservas del ${fecha}${sectorSesion && sesion.rol !== "admin" ? ` · ${sectorSesion}` : ""} — ${reservasFiltradas.length} reservas</h2><table><thead><tr><th>Mesa</th><th>Sector</th><th>Titular / Participantes</th><th>Pers.</th><th>Nota</th><th>Garzón</th></tr></thead><tbody>${filas}</tbody></table><div class="footer">Generado el ${new Date().toLocaleString("es-CL")}</div></body></html>`;
+    const html = `<html><head><meta charset="utf-8"><title>Reservas ${fechaSeleccionada}</title><style>body{font-family:Georgia,serif;padding:30px;color:#222}h1{font-size:22px;margin-bottom:4px}h2{font-size:14px;font-weight:normal;color:#666;margin-bottom:20px}table{width:100%;border-collapse:collapse}th{background:#1a1208;color:#f5e6c8;padding:10px 8px;text-align:left;font-size:12px;letter-spacing:1px;text-transform:uppercase}tr:nth-child(even){background:#f9f6f0}.footer{margin-top:20px;font-size:11px;color:#999}</style></head><body><h1>🔒 Reserva Segura</h1><h2>Reservas del ${fecha}${sectorSesion && sesion.rol !== "admin" ? ` · ${sectorSesion}` : ""} — ${reservasFiltradas.length} reservas</h2><table><thead><tr><th>Mesa</th><th>Sector</th><th>Titular / Participantes</th><th>Pers.</th><th>Nota</th><th>Garzón</th></tr></thead><tbody>${filas}</tbody></table><div class="footer">Generado el ${new Date().toLocaleString("es-CL")}</div></body></html>`;
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     window.open(URL.createObjectURL(blob), "_blank");
   };
@@ -1162,8 +1102,8 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
               <div>
-                <div style={{ fontSize: 10, letterSpacing: 6, color: "#b8914a", textTransform: "uppercase", marginBottom: 4 }}>Sistema de Reservas</div>
-                <h1 style={{ margin: 0, fontSize: 26, fontWeight: "normal", color: "#f5e6c8", letterSpacing: 1 }}>🎶 Calafate</h1>
+                <div style={{ fontSize: 10, letterSpacing: 6, color: "#b8914a", textTransform: "uppercase", marginBottom: 4 }}>Sistema de Seguridad de Reservas</div>
+                <h1 style={{ margin: 0, fontSize: 26, fontWeight: "normal", color: "#f5e6c8", letterSpacing: 1 }}>🔒 Reserva Segura</h1>
               </div>
               {sesion.rol !== "admin" && (
                 <button onClick={onCambiarSector} title="Cambiar sector" style={{ background: "none", border: "1px solid #3a2e1a", borderRadius: 6, fontSize: 20, padding: "6px 10px", color: "#b8914a", cursor: "pointer", marginTop: 6 }}>🏠</button>
@@ -1252,7 +1192,6 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                         <div style={{ borderTop: "1px solid #2a2010", padding: "12px 18px", background: "#0f0c06" }}>
                           <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 10 }}>Lista de participantes</div>
                           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                            {/* Titular + participantes con botón lista negra */}
                             {[{ nombre: r.nombre, apellido: r.apellido, rut: r.rut, esTitular: true }, ...participantes.map(p => ({ ...p, esTitular: false }))].map((persona, idx) => (
                               <div key={idx} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px", background: "#1a1508", borderRadius: 4, border: "1px solid #2a2010" }}>
                                 {persona.esTitular
@@ -1263,12 +1202,8 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                                   <div style={{ fontSize: 14, color: "#f5e6c8" }}>{persona.nombre} {persona.apellido}</div>
                                   <div style={{ fontSize: 11, color: "#7a6a50" }}>🪪 {persona.rut}</div>
                                 </div>
-                                <button
-                                  onClick={() => { setModalListaNegra({ persona, reservaId: r.id }); setMotivoLn(""); }}
-                                  title="Agregar a lista negra"
-                                  style={{ background: "none", border: "1px solid #4a2020", borderRadius: 4, color: "#9a5050", fontSize: 11, padding: "3px 8px", cursor: "pointer", flexShrink: 0, fontFamily: "'Georgia', serif" }}>
-                                  🚫
-                                </button>
+                                <button onClick={() => { setModalListaNegra({ persona, reservaId: r.id }); setMotivoLn(""); }} title="Agregar a lista negra"
+                                  style={{ background: "none", border: "1px solid #4a2020", borderRadius: 4, color: "#9a5050", fontSize: 11, padding: "3px 8px", cursor: "pointer", flexShrink: 0, fontFamily: "'Georgia', serif" }}>🚫</button>
                               </div>
                             ))}
                             {participantes.length === 0 && <div style={{ fontSize: 12, color: "#4a3a22", padding: "6px 12px" }}>Sin participantes adicionales</div>}
@@ -1288,7 +1223,6 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16, flexWrap: "wrap" }}>
               <label style={{ color: "#7a6a50", fontSize: 12, letterSpacing: 1, textTransform: "uppercase" }}>Fecha:</label>
               <input type="date" value={fechaSeleccionada} onChange={e => setFechaSeleccionada(e.target.value)} style={{ ...inp, width: "auto" }} />
-              <button onClick={exportarPDF} title="Exportar PDF" style={{ background: "#7a2020", border: "none", borderRadius: 4, padding: "6px 10px", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>📄</button>
               <span style={{ background: "#2a1e0a", border: "1px solid #3a2e1a", color: "#7ecb7e", padding: "5px 14px", borderRadius: 20, fontSize: 13 }}>{mesasDisponibles().length} disponibles en total</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 20 }}>
@@ -1322,24 +1256,14 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
             <h2 style={{ fontSize: 20, fontWeight: "normal", color: "#f5e6c8", marginBottom: 24, letterSpacing: 1 }}>Nueva Reserva</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 6, padding: 16 }}>
-
-                {/* ── Tabs: Escanear / Pegar texto ── */}
                 <div style={{ display: "flex", borderBottom: "1px solid #2a2010", marginBottom: 14, gap: 0 }}>
-                  {[["qr","📷 Escanear cédula"],["texto","📋 Pegar lista"]].map(([modo, label]) => {
-                    const modoActivo = personas.length > 0 ? "qr" : textoCliente ? "texto" : (content => content)(null);
-                    return (
-                      <button key={modo}
-                        style={{ background: "none", border: "none", borderBottom: "2px solid transparent", color: "#7a6a50", padding: "6px 14px", cursor: "pointer", fontFamily: "'Georgia', serif", fontSize: 13 }}
-                        onClick={() => modo === "qr" ? setScannerAbierto(true) : null}
-                      >{label}</button>
-                    );
-                  })}
+                  <button style={{ background: "none", border: "none", borderBottom: "2px solid transparent", color: "#7a6a50", padding: "6px 14px", cursor: "pointer", fontFamily: "'Georgia', serif", fontSize: 13 }} onClick={() => setScannerAbierto(true)}>📷 Escanear cédula</button>
+                  <button style={{ background: "none", border: "none", borderBottom: "2px solid transparent", color: "#7a6a50", padding: "6px 14px", cursor: "default", fontFamily: "'Georgia', serif", fontSize: 13 }}>📋 Pegar lista</button>
                   <span style={{ marginLeft: "auto", fontSize: 11, color: "#5a4a30", alignSelf: "center", paddingRight: 4 }}>
                     {personas.length > 0 ? `${personas.length}/5 escaneadas` : `${clientesParsed.length}/5 detectadas`}
                   </span>
                 </div>
 
-                {/* ── Modo QR: lista de tarjetas ── */}
                 {personas.length > 0 && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
                     {personas.map((p, idx) => (
@@ -1353,30 +1277,19 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                         📷 Escanear siguiente cédula
                       </button>
                     )}
-                    <button onClick={() => setPersonas([])}
-                      style={{ background: "none", border: "none", color: "#5a4a30", fontSize: 11, cursor: "pointer", fontFamily: "'Georgia', serif", textAlign: "left", padding: "2px 0" }}>
+                    <button onClick={() => setPersonas([])} style={{ background: "none", border: "none", color: "#5a4a30", fontSize: 11, cursor: "pointer", fontFamily: "'Georgia', serif", textAlign: "left", padding: "2px 0" }}>
                       ↩ Limpiar y usar texto en su lugar
                     </button>
                   </div>
                 )}
 
-                {/* ── Modo texto: textarea original ── */}
                 {personas.length === 0 && (
                   <>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                       <label style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#b8914a" }}>Pegar lista de participantes</label>
-                      <button onClick={() => setScannerAbierto(true)}
-                        style={{ background: "#2a1e0a", border: "1px solid #b8914a", borderRadius: 5, color: "#b8914a", fontSize: 12, padding: "5px 12px", cursor: "pointer", fontFamily: "'Georgia', serif" }}>
-                        📷 Escanear cédula
-                      </button>
+                      <button onClick={() => setScannerAbierto(true)} style={{ background: "#2a1e0a", border: "1px solid #b8914a", borderRadius: 5, color: "#b8914a", fontSize: 12, padding: "5px 12px", cursor: "pointer", fontFamily: "'Georgia', serif" }}>📷 Escanear cédula</button>
                     </div>
-                    <textarea
-                      value={textoCliente}
-                      onChange={e => handlePasteCliente(e.target.value)}
-                      placeholder={"Juan García 12.345.678-9\nMaría López 9.876.543-2\nPedro Soto 11.222.333-4"}
-                      rows={4}
-                      style={{ ...inp, resize: "vertical", fontFamily: "monospace", fontSize: 13 }}
-                    />
+                    <textarea value={textoCliente} onChange={e => handlePasteCliente(e.target.value)} placeholder={"Juan García 12.345.678-9\nMaría López 9.876.543-2\nPedro Soto 11.222.333-4"} rows={4} style={{ ...inp, resize: "vertical", fontFamily: "monospace", fontSize: 13 }} />
                     <div style={{ fontSize: 11, color: "#5a4a30", marginTop: 6 }}>Primera línea = titular. Las siguientes son participantes adicionales.</div>
                     {clientesParsed.length > 0 && alertaListaNegra.length === 0 && (
                       <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 4 }}>
@@ -1391,7 +1304,6 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                   </>
                 )}
 
-                {/* Alerta lista negra */}
                 {alertaListaNegra.length > 0 && (
                   <div style={{ marginTop: 12, background: "#2a0808", border: "1px solid #7a1a1a", borderRadius: 4, padding: "12px 14px" }}>
                     <div style={{ fontSize: 13, color: "#f87171", fontWeight: "bold", marginBottom: 6 }}>🚫 Cliente(s) en lista negra — reserva bloqueada</div>
@@ -1435,7 +1347,8 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
               </Field>
               {error && <div style={{ background: "#2a1010", border: "1px solid #5a2020", color: "#cb7e7e", padding: "10px 14px", borderRadius: 4, fontSize: 13 }}>{error}</div>}
               <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
-                <button onClick={handleSubmit} disabled={alertaListaNegra.length > 0 || (personas.length === 0 && clientesParsed.length === 0)} style={{ ...btn("gold"), flex: 1, padding: "12px", fontSize: 15, opacity: (alertaListaNegra.length > 0 || (personas.length === 0 && clientesParsed.length === 0)) ? 0.4 : 1, cursor: (alertaListaNegra.length > 0 || (personas.length === 0 && clientesParsed.length === 0)) ? "not-allowed" : "pointer" }}>
+                <button onClick={handleSubmit} disabled={alertaListaNegra.length > 0 || (personas.length === 0 && clientesParsed.length === 0)}
+                  style={{ ...btn("gold"), flex: 1, padding: "12px", fontSize: 15, opacity: (alertaListaNegra.length > 0 || (personas.length === 0 && clientesParsed.length === 0)) ? 0.4 : 1, cursor: (alertaListaNegra.length > 0 || (personas.length === 0 && clientesParsed.length === 0)) ? "not-allowed" : "pointer" }}>
                   Confirmar Reserva
                 </button>
                 <button onClick={() => { setVista("dia"); setError(""); }} style={{ ...btn("ghost"), padding: "12px 20px" }}>Cancelar</button>
@@ -1447,12 +1360,8 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
         {vista === "admin" && sesion.rol === "admin" && <AdminPanel />}
       </div>
 
-      {/* NUEVO: Modal scanner */}
-      {scannerAbierto && (
-        <QRScanner onResult={onScanResult} onClose={() => setScannerAbierto(false)} />
-      )}
+      {scannerAbierto && <QRScanner onResult={onScanResult} onClose={() => setScannerAbierto(false)} />}
 
-      {/* NUEVO: Modal agregar a lista negra */}
       {modalListaNegra && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 150, padding: 16 }}>
           <div style={{ background: "#15120a", border: "1px solid #5a2020", borderRadius: 10, padding: 28, width: "100%", maxWidth: 400 }}>
@@ -1463,20 +1372,11 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
             </div>
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 6 }}>Motivo (opcional)</label>
-              <input
-                value={motivoLn}
-                onChange={e => setMotivoLn(e.target.value)}
-                placeholder="Ej: Conducta agresiva, pelea..."
-                style={inp}
-                autoFocus
-              />
+              <input value={motivoLn} onChange={e => setMotivoLn(e.target.value)} placeholder="Ej: Conducta agresiva, pelea..." style={inp} autoFocus />
             </div>
-            <div style={{ fontSize: 11, color: "#5a4a30", marginBottom: 20 }}>
-              ⚠️ Solo el administrador puede remover personas de la lista negra.
-            </div>
+            <div style={{ fontSize: 11, color: "#5a4a30", marginBottom: 20 }}>⚠️ Solo el administrador puede remover personas de la lista negra.</div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={agregarAListaNegra} disabled={cargandoLn}
-                style={{ ...btn("danger"), flex: 1, opacity: cargandoLn ? 0.6 : 1 }}>
+              <button onClick={agregarAListaNegra} disabled={cargandoLn} style={{ ...btn("danger"), flex: 1, opacity: cargandoLn ? 0.6 : 1 }}>
                 {cargandoLn ? "Agregando..." : "🚫 Agregar a lista negra"}
               </button>
               <button onClick={() => { setModalListaNegra(null); setMotivoLn(""); }} style={btn("ghost")}>Cancelar</button>
