@@ -931,6 +931,8 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   const [error, setError] = useState("");
   const [exitoMsg, setExitoMsg] = useState("");
   const [scannerAbierto, setScannerAbierto] = useState(false);
+  const [reservaEditando, setReservaEditando] = useState(null);
+  const [editForm, setEditForm] = useState({ mesa_id: "", participantes: [] });
   const [modalListaNegra, setModalListaNegra] = useState(null);
   const [motivoLn, setMotivoLn] = useState("");
   const [cargandoLn, setCargandoLn] = useState(false);
@@ -971,7 +973,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   const onScanResult = (data) => {
     setScannerAbierto(false);
     if (personas.some(p => normalizarRut(p.rut) === normalizarRut(data.run))) return;
-    if (personas.length >= 5) return;
+    if (personas.length >= 7) return;
     setPersonas(prev => [...prev, { nombre: data.nombre || "", apellido: data.apellido || "", rut: data.run }]);
   };
 
@@ -984,7 +986,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     if (!texto.trim()) { setClientesParsed([]); return; }
     const clientes = parsearTodosClientes(texto);
     setClientesParsed(clientes);
-    if (clientes.length > 5) { setError(`⚠️ Máximo 5 personas por mesa. Tienes ${clientes.length}.`); return; }
+    if (clientes.length > 7) { setError(`⚠️ Máximo 7 personas por mesa. Tienes ${clientes.length}.`); return; }
     const sinRut = clientes.filter(c => !c.rut || c.rut.trim() === "");
     const rutsInvalidos = clientes.filter(c => c.rut && c.rut.trim() !== "" && !validarRut(c.rut));
     if (sinRut.length > 0) {
@@ -1018,7 +1020,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     if (!titular.nombre) return setError("No se pudo identificar el nombre del titular. Edita la tarjeta con ✏");
     if (!titular.rut) return setError("No se pudo identificar el RUT del titular.");
     if (!form.mesa_id) return setError("Selecciona una mesa en el mapa.");
-    if (listaFinal.length > 5) return setError(`⚠️ Máximo 5 personas por mesa. Tienes ${listaFinal.length}.`);
+    if (listaFinal.length > 7) return setError(`⚠️ Máximo 7 personas por mesa. Tienes ${listaFinal.length}.`);
     const sinRut = listaFinal.filter(c => !c.rut || c.rut.trim() === "");
     if (sinRut.length > 0) return setError(`⚠️ RUT obligatorio: ${sinRut.map(c => `${c.nombre} ${c.apellido}`).join(", ")} no tiene RUT.`);
     const rutsInvalidos = listaFinal.filter(c => !validarRut(c.rut));
@@ -1065,6 +1067,34 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     setMotivoLn("");
     cargarListaNegra();
     flash(`${persona.nombre} ${persona.apellido} agregado a lista negra.`);
+  };
+
+  const abrirEdicion = (r) => {
+    const participantes = Array.isArray(r.participantes) ? r.participantes : [];
+    setEditForm({
+      mesa_id: String(r.mesa_id),
+      participantes: [{ nombre: r.nombre, apellido: r.apellido, rut: r.rut }, ...participantes],
+    });
+    setReservaEditando(r);
+  };
+
+  const guardarEdicion = async () => {
+    if (!editForm.mesa_id) return;
+    const titular = editForm.participantes[0] || {};
+    const participantes = editForm.participantes.slice(1);
+    // Verificar que la mesa no esté ocupada por otra reserva
+    const mesaOcupada = reservas.some(r => r.mesa_id === parseInt(editForm.mesa_id) && r.fecha === reservaEditando.fecha && r.id !== reservaEditando.id);
+    if (mesaOcupada) { alert(`La mesa ${editForm.mesa_id} ya está reservada para esa noche.`); return; }
+    await db.patch("reservas", reservaEditando.id, {
+      nombre: titular.nombre, apellido: titular.apellido, rut: titular.rut,
+      mesa_id: parseInt(editForm.mesa_id),
+      personas: editForm.participantes.length,
+      participantes,
+    });
+    await registrarLog("EDICION", `Mesa ${editForm.mesa_id} — ${titular.nombre} ${titular.apellido} (${titular.rut})`);
+    setReservaEditando(null);
+    flash("Reserva actualizada.");
+    cargarReservas();
   };
 
   const cancelarReserva = async () => {
@@ -1185,6 +1215,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                         </div>
                         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                           <span style={{ fontSize: 13, color: "#5a4a30" }}>{expandida ? "▲" : "▼"}</span>
+                          <button onClick={e => { e.stopPropagation(); abrirEdicion(r); }} style={{ ...btn("ghost"), fontSize: 12, padding: "6px 14px", color: "#b8914a", borderColor: "#3a2e1a" }}>✏ Editar</button>
                           <button onClick={e => { e.stopPropagation(); setReservaAEliminar(r); }} style={{ ...btn("ghost"), fontSize: 12, padding: "6px 14px", color: "#9a5050", borderColor: "#4a2020" }}>Cancelar reserva</button>
                         </div>
                       </div>
@@ -1260,7 +1291,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                   <button style={{ background: "none", border: "none", borderBottom: "2px solid transparent", color: "#7a6a50", padding: "6px 14px", cursor: "pointer", fontFamily: "'Georgia', serif", fontSize: 13 }} onClick={() => setScannerAbierto(true)}>📷 Escanear cédula</button>
                   <button style={{ background: "none", border: "none", borderBottom: "2px solid transparent", color: "#7a6a50", padding: "6px 14px", cursor: "default", fontFamily: "'Georgia', serif", fontSize: 13 }}>📋 Pegar lista</button>
                   <span style={{ marginLeft: "auto", fontSize: 11, color: "#5a4a30", alignSelf: "center", paddingRight: 4 }}>
-                    {personas.length > 0 ? `${personas.length}/5 escaneadas` : `${clientesParsed.length}/5 detectadas`}
+                    {personas.length > 0 ? `${personas.length}/7 escaneadas` : `${clientesParsed.length}/7 detectadas`}
                   </span>
                 </div>
 
@@ -1269,7 +1300,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                     {personas.map((p, idx) => (
                       <TarjetaPersona key={idx} persona={p} idx={idx} onEditar={editarPersona} onEliminar={eliminarPersona} />
                     ))}
-                    {personas.length < 5 && (
+                    {personas.length < 7 && (
                       <button onClick={() => setScannerAbierto(true)}
                         style={{ background: "none", border: "1px dashed #3a2e1a", borderRadius: 6, color: "#7a6a50", padding: "9px", fontSize: 13, cursor: "pointer", fontFamily: "'Georgia', serif" }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = "#b8914a"; e.currentTarget.style.color = "#b8914a"; }}
@@ -1322,7 +1353,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                 return (
                   <div style={{ background: "#15120a", border: `1px solid ${total > 5 ? "#7a2020" : "#3a5a1a"}`, borderRadius: 4, padding: "10px 14px", fontSize: 13, color: total > 5 ? "#f87171" : "#7ecb7e" }}>
                     👥 {total} persona{total > 1 ? "s" : ""} {personas.length > 0 ? "escaneada" : "detectada"}{total > 1 ? "s" : ""}
-                    {total > 5 && <span style={{ marginLeft: 8, fontWeight: "bold" }}>— máximo 5</span>}
+                    {total > 7 && <span style={{ marginLeft: 8, fontWeight: "bold" }}>— máximo 7</span>}
                   </div>
                 );
               })()}
@@ -1361,6 +1392,63 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
       </div>
 
       {scannerAbierto && <QRScanner onResult={onScanResult} onClose={() => setScannerAbierto(false)} />}
+
+      {reservaEditando && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 150, padding: 16, overflowY: "auto" }}>
+          <div style={{ background: "#15120a", border: "1px solid #3a2e1a", borderRadius: 10, padding: 28, width: "100%", maxWidth: 560 }}>
+            <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 16 }}>Editar Reserva</div>
+
+            {/* Selección de mesa */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 8 }}>Mesa — haz clic para cambiar</label>
+              <FloorMap
+                reservas={reservas}
+                fecha={reservaEditando.fecha}
+                mesaSeleccionada={editForm.mesa_id ? parseInt(editForm.mesa_id) : null}
+                onMesaClick={(id) => setEditForm(p => ({ ...p, mesa_id: String(id) }))}
+                soloZona={sesion.rol !== "admin" ? sectorSesion : null}
+              />
+              {editForm.mesa_id && (
+                <div style={{ marginTop: 8, padding: "6px 12px", background: "#1a2010", border: "1px solid #3a5a1a", borderRadius: 4, fontSize: 13, color: "#7ecb7e" }}>
+                  ✓ Mesa {editForm.mesa_id} seleccionada — {MESAS.find(m => m.id === parseInt(editForm.mesa_id))?.zona}
+                </div>
+              )}
+            </div>
+
+            {/* Editar participantes */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 8 }}>Participantes ({editForm.participantes.length}/7)</label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {editForm.participantes.map((p, idx) => (
+                  <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center", background: "#0f0c06", border: `1px solid ${idx === 0 ? "#b8914a" : "#2a2010"}`, borderRadius: 6, padding: "8px 12px" }}>
+                    <span style={{ fontSize: 10, background: idx === 0 ? "#b8914a" : "#2a2010", color: idx === 0 ? "#0f0e0c" : "#7a6a50", padding: "2px 7px", borderRadius: 10, fontWeight: "bold", flexShrink: 0 }}>
+                      {idx === 0 ? "TITULAR" : `${idx + 1}`}
+                    </span>
+                    <input value={p.nombre} onChange={e => { const np = [...editForm.participantes]; np[idx] = { ...np[idx], nombre: e.target.value }; setEditForm(f => ({ ...f, participantes: np })); }} placeholder="Nombre" style={{ ...inp, flex: 1, padding: "5px 8px", fontSize: 12 }} />
+                    <input value={p.apellido} onChange={e => { const np = [...editForm.participantes]; np[idx] = { ...np[idx], apellido: e.target.value }; setEditForm(f => ({ ...f, participantes: np })); }} placeholder="Apellido" style={{ ...inp, flex: 1, padding: "5px 8px", fontSize: 12 }} />
+                    <input value={p.rut} onChange={e => { const np = [...editForm.participantes]; np[idx] = { ...np[idx], rut: e.target.value }; setEditForm(f => ({ ...f, participantes: np })); }} placeholder="RUT" style={{ ...inp, flex: 1, padding: "5px 8px", fontSize: 12 }} />
+                    {idx > 0 && (
+                      <button onClick={() => setEditForm(f => ({ ...f, participantes: f.participantes.filter((_, i) => i !== idx) }))}
+                        style={{ background: "none", border: "1px solid #4a2020", borderRadius: 4, color: "#9a5050", fontSize: 13, padding: "4px 8px", cursor: "pointer", flexShrink: 0 }}>✕</button>
+                    )}
+                  </div>
+                ))}
+                {editForm.participantes.length < 7 && (
+                  <button onClick={() => setEditForm(f => ({ ...f, participantes: [...f.participantes, { nombre: "", apellido: "", rut: "" }] }))}
+                    style={{ background: "none", border: "1px dashed #3a2e1a", borderRadius: 6, color: "#7a6a50", padding: "8px", fontSize: 13, cursor: "pointer", fontFamily: "'Georgia', serif" }}>
+                    + Agregar participante
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={guardarEdicion} style={{ ...btn("gold"), flex: 1 }}>Guardar cambios</button>
+              <button onClick={() => setReservaEditando(null)} style={btn("ghost")}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modalListaNegra && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 150, padding: 16 }}>
