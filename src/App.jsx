@@ -93,24 +93,26 @@ const today = fechaNoche;
 const ADMIN_DEFAULT = { id: "admin", usuario: "admin", password: "admin123", rol: "admin", nombre: "Administrador" };
 
 const inp = {
-  width: "100%", background: "#1a1508", border: "1px solid #2a2010",
-  borderRadius: 3, color: "#e8dcc8", padding: "9px 12px",
-  fontFamily: "'Georgia', serif", fontSize: 14, outline: "none", boxSizing: "border-box",
+  width: "100%", background: "#031220", border: "1px solid #0a3a5a",
+  borderRadius: 3, color: "#cceeff", padding: "9px 12px",
+  fontFamily: "'Courier New', 'Lucida Console', monospace", fontSize: 14, outline: "none", boxSizing: "border-box",
 };
 
 const btn = (v = "gold") => ({
-  background: v === "gold" ? "#b8914a" : v === "danger" ? "#7a2020" : "none",
-  color: v === "gold" ? "#0f0e0c" : "#f5e6c8",
-  border: v === "ghost" ? "1px solid #3a2e1a" : "none",
+  background: v === "gold" ? "transparent" : v === "danger" ? "#1a0020" : "none",
+  color: v === "gold" ? "#00d4ff" : v === "danger" ? "#ff4466" : "#e0f4ff",
+  border: v === "gold" ? "1px solid #00d4ff" : v === "danger" ? "1px solid #ff4466" : "1px solid #0d4a6e",
   padding: "9px 18px", borderRadius: 3, cursor: "pointer",
-  fontFamily: "'Georgia', serif", fontSize: 14,
+  fontFamily: "'Courier New', 'Lucida Console', monospace", fontSize: 14,
   fontWeight: v === "gold" ? "bold" : "normal",
+  boxShadow: v === "gold" ? "0 0 10px rgba(0,212,255,0.3)" : v === "danger" ? "0 0 10px rgba(255,68,102,0.2)" : "none",
+  letterSpacing: 1,
 });
 
 function Field({ label, children }) {
   return (
     <div>
-      <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 6 }}>{label}</label>
+      <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#4a7a9a", marginBottom: 6 }}>{label}</label>
       {children}
     </div>
   );
@@ -118,7 +120,7 @@ function Field({ label, children }) {
 
 function Spinner() {
   return (
-    <div style={{ textAlign: "center", padding: "60px 20px", color: "#4a3a22" }}>
+    <div style={{ textAlign: "center", padding: "60px 20px", color: "#1a4a6a" }}>
       <div style={{ fontSize: 28, marginBottom: 10 }}>⏳</div>
       <div>Cargando...</div>
     </div>
@@ -198,6 +200,27 @@ function estaEnListaNegra(cliente, listaNegra) {
   }) || null;
 }
 
+function limpiarTextoQR(texto) {
+  if (!texto) return "";
+  return texto
+    .replace(/Ã¡/g, "á").replace(/Ã©/g, "é").replace(/Ã­/g, "í").replace(/Ã³/g, "ó").replace(/Ãº/g, "ú")
+    .replace(/Ã±/g, "ñ").replace(/Ã'/g, "Ñ")
+    .replace(/E�/g, "É").replace(/e�/g, "é")
+    .replace(/A�/g, "Á").replace(/a�/g, "á")
+    .replace(/I�/g, "Í").replace(/i�/g, "í")
+    .replace(/O�/g, "Ó").replace(/o�/g, "ó")
+    .replace(/U�/g, "Ú").replace(/u�/g, "ú")
+    .replace(/N�/g, "Ñ").replace(/n�/g, "ñ")
+    .replace(/E[?]/g, "É").replace(/e[?]/g, "é")
+    .replace(/A[?]/g, "Á").replace(/a[?]/g, "á")
+    .replace(/I[?]/g, "Í").replace(/i[?]/g, "í")
+    .replace(/O[?]/g, "Ó").replace(/o[?]/g, "ó")
+    .replace(/U[?]/g, "Ú").replace(/u[?]/g, "ú")
+    .replace(/N[?]/g, "Ñ").replace(/n[?]/g, "ñ")
+    .replace(/�/g, "")
+    .trim();
+}
+
 function parseQRCedula(url) {
   try {
     const u = new URL(url.trim());
@@ -210,11 +233,12 @@ function parseQRCedula(url) {
     if (!run || !mrz) return null;
     let nombre = "", apellido = "";
     if (name) {
-      const partes = name.trim().split(/\s+/);
+      const nombreLimpio = limpiarTextoQR(name);
+      const partes = nombreLimpio.trim().split(/\s+/);
       nombre = partes[0] || "";
       apellido = partes.slice(1).join(" ") || "";
     }
-    return { run, nombre, apellido };
+    return { run, nombre: limpiarTextoQR(nombre), apellido: limpiarTextoQR(apellido) };
   } catch { return null; }
 }
 
@@ -320,24 +344,24 @@ function QRScanner({ onResult, onClose }) {
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", background: "linear-gradient(to bottom, rgba(0,0,0,0.75), transparent)" }}>
           <div>
-            <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase" }}>Escanear Cédula</div>
+            <div style={{ fontSize: 11, letterSpacing: 3, color: "#00d4ff", textTransform: "uppercase" }}>Escanear Cédula</div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", marginTop: 2 }}>Apunta el QR al marco dorado</div>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={toggleLinterna} style={{ background: linterna ? "#b8914a" : "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, color: linterna ? "#0f0e0c" : "#fff", fontSize: 20, padding: "8px 12px", cursor: "pointer" }}>🔦</button>
+            <button onClick={toggleLinterna} style={{ background: linterna ? "#00d4ff" : "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, color: linterna ? "#0f0e0c" : "#fff", fontSize: 20, padding: "8px 12px", cursor: "pointer" }}>🔦</button>
             <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, color: "#fff", fontSize: 18, padding: "8px 12px", cursor: "pointer" }}>✕</button>
           </div>
         </div>
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
           {escaneado ? (
-            <div style={{ background: "rgba(10,40,10,0.9)", border: "2px solid #7ecb7e", borderRadius: 16, padding: "32px 40px", textAlign: "center" }}>
+            <div style={{ background: "rgba(10,40,10,0.9)", border: "2px solid #00ff88", borderRadius: 16, padding: "32px 40px", textAlign: "center" }}>
               <div style={{ fontSize: 48, marginBottom: 10 }}>✅</div>
-              <div style={{ fontSize: 15, color: "#7ecb7e", fontFamily: "'Georgia', serif" }}>¡Cédula detectada!</div>
+              <div style={{ fontSize: 15, color: "#00ff88", fontFamily: "'Courier New', 'Lucida Console', monospace" }}>¡Cédula detectada!</div>
             </div>
           ) : error ? (
             <div style={{ background: "rgba(40,10,10,0.9)", border: "2px solid #cb7e7e", borderRadius: 16, padding: "24px 32px", textAlign: "center", maxWidth: 300 }}>
               <div style={{ fontSize: 32, marginBottom: 10 }}>📷</div>
-              <div style={{ fontSize: 13, color: "#cb7e7e", fontFamily: "'Georgia', serif" }}>{error}</div>
+              <div style={{ fontSize: 13, color: "#cb7e7e", fontFamily: "'Courier New', 'Lucida Console', monospace" }}>{error}</div>
               <button onClick={onClose} style={{ ...btn("ghost"), marginTop: 16, fontSize: 13 }}>Cerrar</button>
             </div>
           ) : (
@@ -349,10 +373,10 @@ function QRScanner({ onResult, onClose }) {
                   top: t === "0" ? 0 : "auto", bottom: t === "auto" ? 0 : "auto",
                   left: r === "0" ? 0 : "auto", right: r === "auto" ? 0 : "auto",
                   width: 28, height: 28,
-                  borderTop: (k==="tl"||k==="tr") ? "3px solid #b8914a" : "none",
-                  borderBottom: (k==="bl"||k==="br") ? "3px solid #b8914a" : "none",
-                  borderLeft: (k==="tl"||k==="bl") ? "3px solid #b8914a" : "none",
-                  borderRight: (k==="tr"||k==="br") ? "3px solid #b8914a" : "none",
+                  borderTop: (k==="tl"||k==="tr") ? "3px solid #00d4ff" : "none",
+                  borderBottom: (k==="bl"||k==="br") ? "3px solid #00d4ff" : "none",
+                  borderLeft: (k==="tl"||k==="bl") ? "3px solid #00d4ff" : "none",
+                  borderRight: (k==="tr"||k==="br") ? "3px solid #00d4ff" : "none",
                   borderRadius: k==="tl"?"8px 0 0 0":k==="tr"?"0 8px 0 0":k==="bl"?"0 0 0 8px":"0 0 8px 0",
                 }} />
               ))}
@@ -381,7 +405,7 @@ function TarjetaPersona({ persona, idx, onEditar, onEliminar }) {
   const sinNombre = !persona.nombre && !persona.apellido;
 
   return (
-    <div style={{ background: "#0f0c06", border: `1px solid ${idx === 0 ? "#b8914a" : "#2a2010"}`, borderLeft: `3px solid ${idx === 0 ? "#b8914a" : "#3a2e1a"}`, borderRadius: 6, padding: "10px 14px" }}>
+    <div style={{ background: "#031020", border: `1px solid ${idx === 0 ? "#00d4ff" : "#2a2010"}`, borderLeft: `3px solid ${idx === 0 ? "#00d4ff" : "#0d4a6e"}`, borderRadius: 6, padding: "10px 14px" }}>
       {editando ? (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Nombre" style={{ ...inp, flex: 1, minWidth: 80, padding: "6px 10px", fontSize: 13 }} />
@@ -392,19 +416,19 @@ function TarjetaPersona({ persona, idx, onEditar, onEliminar }) {
       ) : (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: 10, background: idx === 0 ? "#b8914a" : "#2a2010", color: idx === 0 ? "#0f0e0c" : "#7a6a50", padding: "2px 7px", borderRadius: 10, fontWeight: "bold", flexShrink: 0 }}>
+            <span style={{ fontSize: 10, background: idx === 0 ? "#00d4ff" : "#2a2010", color: idx === 0 ? "#0f0e0c" : "#4a7a9a", padding: "2px 7px", borderRadius: 10, fontWeight: "bold", flexShrink: 0 }}>
               {idx === 0 ? "TITULAR" : `${idx + 1}`}
             </span>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 14, color: sinNombre ? "#5a4a30" : "#f5e6c8", fontStyle: sinNombre ? "italic" : "normal" }}>
+              <div style={{ fontSize: 14, color: sinNombre ? "#2a5a7a" : "#e0f4ff", fontStyle: sinNombre ? "italic" : "normal" }}>
                 {sinNombre ? "Sin nombre" : `${persona.nombre} ${persona.apellido}`.trim()}
-                {sinNombre && <span style={{ marginLeft: 8, fontSize: 11, color: "#b8914a" }}>⚠ Toca ✏ para completar</span>}
+                {sinNombre && <span style={{ marginLeft: 8, fontSize: 11, color: "#00d4ff" }}>⚠ Toca ✏ para completar</span>}
               </div>
-              <div style={{ fontSize: 11, color: "#7a6a50", marginTop: 2, fontFamily: "monospace" }}>🪪 {persona.rut}</div>
+              <div style={{ fontSize: 11, color: "#4a7a9a", marginTop: 2, fontFamily: "monospace" }}>🪪 {persona.rut}</div>
             </div>
           </div>
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-            <button onClick={() => { setNombre(persona.nombre || ""); setApellido(persona.apellido || ""); setEditando(true); }} style={{ background: "none", border: "1px solid #3a2e1a", borderRadius: 4, color: "#7a6a50", fontSize: 13, padding: "4px 9px", cursor: "pointer" }}>✏</button>
+            <button onClick={() => { setNombre(persona.nombre || ""); setApellido(persona.apellido || ""); setEditando(true); }} style={{ background: "none", border: "1px solid #0d4a6e", borderRadius: 4, color: "#4a7a9a", fontSize: 13, padding: "4px 9px", cursor: "pointer" }}>✏</button>
             <button onClick={() => onEliminar(idx)} style={{ background: "none", border: "1px solid #4a2020", borderRadius: 4, color: "#9a5050", fontSize: 13, padding: "4px 9px", cursor: "pointer" }}>✕</button>
           </div>
         </div>
@@ -420,13 +444,13 @@ function FloorMap({ reservas, fecha, onMesaClick, mesaSeleccionada, soloZona }) 
   return (
     <div style={{ width: "100%", position: "relative" }}>
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 14 }}>
-        {[["#d4a017","#fbbf24","Disponible"],["#cb7e7e","#ff4444","Ocupada"],["#f5e6c8","#f5d060","Seleccionada"]].map(([bg, bd, label]) => (
+        {[["#0088bb","#00eeff","Disponible"],["#cb7e7e","#ff4444","Ocupada"],["#e0f4ff","#00eeff","Seleccionada"]].map(([bg, bd, label]) => (
           <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#9a8a6a" }}>
             <div style={{ width: 12, height: 12, borderRadius: 2, background: bg, border: `1px solid ${bd}` }} />{label}
           </div>
         ))}
       </div>
-      <div style={{ position: "relative", width: "100%", paddingBottom: "70%", background: "linear-gradient(160deg, #1a0a2e 0%, #0f0a20 40%, #0a0a1a 100%)", border: "1px solid #2a1a4a", borderRadius: 10, overflow: "hidden" }}>
+      <div style={{ position: "relative", width: "100%", paddingBottom: "70%", background: "linear-gradient(160deg, #1a0a2e 0%, #0f0a20 40%, #0a0a1a 100%)", border: "1px solid #0a3a6a", borderRadius: 10, overflow: "hidden" }}>
         <div style={{ position: "absolute", top: "2%", left: "20%", width: "60%", height: "8%", background: "#3b1f6a", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <span style={{ fontSize: 10, color: "#c4b5fd", letterSpacing: 3, textTransform: "uppercase" }}>Sector Pantalla</span>
         </div>
@@ -468,22 +492,22 @@ function FloorMap({ reservas, fecha, onMesaClick, mesaSeleccionada, soloZona }) 
               style={{
                 position: "absolute", left: `${pos.x}%`, top: `${pos.y}%`,
                 transform: "translate(-50%, -50%)", width: 22, height: 22, borderRadius: 4,
-                background: seleccionada ? "#f5d060" : ocupada ? "#7f1d1d" : "#b8860b",
-                border: seleccionada ? "2px solid #fbbf24" : ocupada ? "1px solid #ef4444" : "1px solid #fbbf24",
+                background: seleccionada ? "#00eeff" : ocupada ? "#7f1d1d" : "#005a8a",
+                border: seleccionada ? "2px solid #00eeff" : ocupada ? "1px solid #ef4444" : "1px solid #00eeff",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 8, fontWeight: "bold",
                 color: seleccionada ? "#0f0e0c" : ocupada ? "#fca5a5" : "#fff",
                 cursor: (ocupada || !estaEnZona) ? "not-allowed" : onMesaClick ? "pointer" : "default",
                 transition: "all 0.15s", zIndex: seleccionada ? 10 : 2,
                 opacity: estaEnZona ? 1 : 0.25,
-                boxShadow: seleccionada ? "0 0 8px #fbbf24" : ocupada ? "0 0 4px rgba(239,68,68,0.4)" : "0 1px 3px rgba(0,0,0,0.4)",
+                boxShadow: seleccionada ? "0 0 8px #00eeff" : ocupada ? "0 0 4px rgba(239,68,68,0.4)" : "0 1px 3px rgba(0,0,0,0.4)",
               }}
             >
               {mesa.id}
               {tooltip === mesa.id && (
-                <div style={{ position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)", background: "#1a1208", border: "1px solid #3a2e1a", borderRadius: 4, padding: "5px 10px", whiteSpace: "nowrap", fontSize: 11, color: "#e8dcc8", pointerEvents: "none", zIndex: 20, fontFamily: "'Georgia', serif", fontWeight: "normal" }}>
+                <div style={{ position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)", background: "#1a1208", border: "1px solid #0d4a6e", borderRadius: 4, padding: "5px 10px", whiteSpace: "nowrap", fontSize: 11, color: "#cceeff", pointerEvents: "none", zIndex: 20, fontFamily: "'Courier New', 'Lucida Console', monospace", fontWeight: "normal" }}>
                   Mesa {mesa.id} · {mesa.zona}<br />
-                  <span style={{ color: ocupada ? "#f87171" : "#7ecb7e" }}>{ocupada ? "Ocupada" : "Disponible"}</span>
+                  <span style={{ color: ocupada ? "#f87171" : "#00ff88" }}>{ocupada ? "Ocupada" : "Disponible"}</span>
                 </div>
               )}
             </div>
@@ -520,12 +544,12 @@ function Login({ onLogin }) {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0a0806", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Georgia', serif", padding: 16 }}>
+    <div style={{ minHeight: "100vh", background: "#010a13", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Courier New', 'Lucida Console', monospace", padding: 16 }}>
       <div style={{ width: "100%", maxWidth: 380, textAlign: "center" }}>
-        <div style={{ fontSize: 11, letterSpacing: 8, color: "#b8914a", textTransform: "uppercase", marginBottom: 12 }}>Sistema de Seguridad de Reservas</div>
-        <h1 style={{ fontSize: 34, fontWeight: "normal", color: "#f5e6c8", margin: "0 0 4px", letterSpacing: 2 }}>🔒 Reserva Segura</h1>
-        <div style={{ fontSize: 12, color: "#4a3a22", marginBottom: 44, letterSpacing: 4, textTransform: "uppercase" }}>Sistema de Acceso</div>
-        <div style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 8, padding: 32 }}>
+        <div style={{ fontSize: 11, letterSpacing: 8, color: "#00d4ff", textTransform: "uppercase", marginBottom: 12 }}>Sistema de Seguridad de Reservas</div>
+        <h1 style={{ fontSize: 34, fontWeight: "normal", color: "#e0f4ff", margin: "0 0 4px", letterSpacing: 2 }}>🔒 Reserva Segura</h1>
+        <div style={{ fontSize: 12, color: "#1a4a6a", marginBottom: 44, letterSpacing: 4, textTransform: "uppercase" }}>Sistema de Acceso</div>
+        <div style={{ background: "#041525", border: "1px solid #0a3a5a", borderRadius: 8, padding: 32 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <Field label="Usuario"><input value={usuario} onChange={e => { setUsuario(e.target.value); setError(""); }} placeholder="Tu usuario" style={inp} onKeyDown={e => e.key === "Enter" && handleLogin()} /></Field>
             <Field label="Contraseña"><input type="password" value={password} onChange={e => { setPassword(e.target.value); setError(""); }} placeholder="••••••••" style={inp} onKeyDown={e => e.key === "Enter" && handleLogin()} /></Field>
@@ -540,17 +564,17 @@ function Login({ onLogin }) {
 
 function SeleccionSector({ sesion, onSectorElegido }) {
   return (
-    <div style={{ minHeight: "100vh", background: "#0a0806", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Georgia', serif", padding: 16 }}>
+    <div style={{ minHeight: "100vh", background: "#010a13", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Courier New', 'Lucida Console', monospace", padding: 16 }}>
       <div style={{ width: "100%", maxWidth: 480, textAlign: "center" }}>
-        <div style={{ fontSize: 11, letterSpacing: 6, color: "#b8914a", textTransform: "uppercase", marginBottom: 8 }}>Bienvenida</div>
-        <h2 style={{ fontSize: 24, fontWeight: "normal", color: "#f5e6c8", marginBottom: 4 }}>{sesion.nombre}</h2>
-        <p style={{ color: "#7a6a50", fontSize: 14, marginBottom: 36 }}>¿Cuál es tu sector esta noche?</p>
+        <div style={{ fontSize: 11, letterSpacing: 6, color: "#00d4ff", textTransform: "uppercase", marginBottom: 8 }}>Bienvenida</div>
+        <h2 style={{ fontSize: 24, fontWeight: "normal", color: "#e0f4ff", marginBottom: 4 }}>{sesion.nombre}</h2>
+        <p style={{ color: "#4a7a9a", fontSize: 14, marginBottom: 36 }}>¿Cuál es tu sector esta noche?</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           {SECTORES.map(sector => (
             <button key={sector} onClick={() => onSectorElegido(sector)}
-              style={{ background: "#15120a", border: "1px solid #3a2e1a", borderRadius: 8, padding: "22px 16px", cursor: "pointer", fontFamily: "'Georgia', serif", color: "#f5e6c8", fontSize: 15, transition: "all 0.15s" }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = "#b8914a"; e.currentTarget.style.color = "#fbbf24"; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = "#3a2e1a"; e.currentTarget.style.color = "#f5e6c8"; }}
+              style={{ background: "#041525", border: "1px solid #0d4a6e", borderRadius: 8, padding: "22px 16px", cursor: "pointer", fontFamily: "'Courier New', 'Lucida Console', monospace", color: "#e0f4ff", fontSize: 15, transition: "all 0.15s" }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = "#00d4ff"; e.currentTarget.style.color = "#00eeff"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = "#0d4a6e"; e.currentTarget.style.color = "#e0f4ff"; }}
             >
               <div style={{ fontSize: 28, marginBottom: 8 }}>{sector === "Sector Isla" ? "🏝️" : sector === "Sector Pantallas" ? "📺" : sector === "Sector Escape" ? "🚪" : "🎧"}</div>
               {sector}
@@ -653,17 +677,17 @@ function AdminPanel() {
 
   const eliminarListaNegra = async (ln) => { await db.delete("lista_negra", ln.id); setConfirmarEliminarLn(null); flash("Persona removida de lista negra."); cargarListaNegra(); };
 
-  const tabStyle = (t) => ({ background: "none", border: "none", borderBottom: tab === t ? "2px solid #b8914a" : "2px solid transparent", color: tab === t ? "#f5e6c8" : "#7a6a50", padding: "8px 14px", cursor: "pointer", fontFamily: "'Georgia', serif", fontSize: 13 });
+  const tabStyle = (t) => ({ background: "none", border: "none", borderBottom: tab === t ? "2px solid #00d4ff" : "2px solid transparent", color: tab === t ? "#e0f4ff" : "#4a7a9a", padding: "8px 14px", cursor: "pointer", fontFamily: "'Courier New', 'Lucida Console', monospace", fontSize: 13 });
   const intentosNuevos = intentos.filter(i => !i.visto).length;
 
   return (
     <div>
-      {msg && <div style={{ position: "fixed", top: 20, right: 20, zIndex: 999, background: "#2a4a2a", color: "#7ecb7e", border: "1px solid #4a8a4a", padding: "12px 20px", borderRadius: 4, fontSize: 14 }}>{msg}</div>}
+      {msg && <div style={{ position: "fixed", top: 20, right: 20, zIndex: 999, background: "#003a2a", color: "#00ff88", border: "1px solid #006a4a", padding: "12px 20px", borderRadius: 4, fontSize: 14 }}>{msg}</div>}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 10, letterSpacing: 4, color: "#b8914a", textTransform: "uppercase", marginBottom: 4 }}>Panel de Administrador</div>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: "normal", color: "#f5e6c8" }}>Configuración</h2>
+        <div style={{ fontSize: 10, letterSpacing: 4, color: "#00d4ff", textTransform: "uppercase", marginBottom: 4 }}>Panel de Administrador</div>
+        <h2 style={{ margin: 0, fontSize: 20, fontWeight: "normal", color: "#e0f4ff" }}>Configuración</h2>
       </div>
-      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #2a2010", marginBottom: 24, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #0a3a5a", marginBottom: 24, flexWrap: "wrap" }}>
         <button style={tabStyle("garzones")} onClick={() => setTab("garzones")}>Garzones</button>
         <button style={tabStyle("listanegra")} onClick={() => setTab("listanegra")}>Lista negra</button>
         <button style={{ ...tabStyle("intentos") }} onClick={() => setTab("intentos")}>
@@ -676,8 +700,8 @@ function AdminPanel() {
 
       {tab === "garzones" && (
         <>
-          <div style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 8, padding: 24, marginBottom: 28 }}>
-            <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 16 }}>{editando ? "Editar Garzón" : "Nuevo Garzón"}</div>
+          <div style={{ background: "#041525", border: "1px solid #0a3a5a", borderRadius: 8, padding: 24, marginBottom: 28 }}>
+            <div style={{ fontSize: 11, letterSpacing: 3, color: "#00d4ff", textTransform: "uppercase", marginBottom: 16 }}>{editando ? "Editar Garzón" : "Nuevo Garzón"}</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 16, marginBottom: 16 }}>
               <Field label="Nombre completo"><input value={form.nombre} onChange={e => { setForm(p => ({ ...p, nombre: e.target.value })); setError(""); }} placeholder="Ej: Sofía Reyes" style={inp} /></Field>
               <Field label="Usuario"><input value={form.usuario} onChange={e => { setForm(p => ({ ...p, usuario: e.target.value })); setError(""); }} placeholder="Ej: garzon11" style={inp} /></Field>
@@ -692,14 +716,14 @@ function AdminPanel() {
           {cargando ? <Spinner /> : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {usuarios.map(u => (
-                <div key={u.id} style={{ background: "#15120a", border: "1px solid #2a2010", borderLeft: `3px solid ${u.activo ? "#b8914a" : "#3a2a1a"}`, borderRadius: 6, padding: "13px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, opacity: u.activo ? 1 : 0.55 }}>
+                <div key={u.id} style={{ background: "#041525", border: "1px solid #0a3a5a", borderLeft: `3px solid ${u.activo ? "#00d4ff" : "#3a2a1a"}`, borderRadius: 6, padding: "13px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, opacity: u.activo ? 1 : 0.55 }}>
                   <div>
-                    <div style={{ fontSize: 15, color: "#f5e6c8", marginBottom: 2 }}>{u.nombre}</div>
-                    <div style={{ fontSize: 12, color: "#7a6a50" }}>@{u.usuario} · <span style={{ color: u.activo ? "#7ecb7e" : "#9a5050" }}>{u.activo ? "Activo" : "Inactivo"}</span></div>
+                    <div style={{ fontSize: 15, color: "#e0f4ff", marginBottom: 2 }}>{u.nombre}</div>
+                    <div style={{ fontSize: 12, color: "#4a7a9a" }}>@{u.usuario} · <span style={{ color: u.activo ? "#00ff88" : "#9a5050" }}>{u.activo ? "Activo" : "Inactivo"}</span></div>
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button onClick={() => { setEditando(u.id); setForm({ nombre: u.nombre, usuario: u.usuario, password: u.password }); setError(""); }} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px" }}>Editar</button>
-                    <button onClick={() => toggleActivo(u)} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px", color: u.activo ? "#cb9e50" : "#7ecb7e" }}>{u.activo ? "Desactivar" : "Activar"}</button>
+                    <button onClick={() => toggleActivo(u)} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px", color: u.activo ? "#0099cc" : "#00ff88" }}>{u.activo ? "Desactivar" : "Activar"}</button>
                     <button onClick={() => setConfirmarEliminar(u)} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px", color: "#9a5050", borderColor: "#4a2020" }}>Eliminar</button>
                   </div>
                 </div>
@@ -711,8 +735,8 @@ function AdminPanel() {
 
       {tab === "listanegra" && (
         <>
-          <div style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 8, padding: 24, marginBottom: 24 }}>
-            <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 16 }}>Agregar persona</div>
+          <div style={{ background: "#041525", border: "1px solid #0a3a5a", borderRadius: 8, padding: 24, marginBottom: 24 }}>
+            <div style={{ fontSize: 11, letterSpacing: 3, color: "#00d4ff", textTransform: "uppercase", marginBottom: 16 }}>Agregar persona</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14, marginBottom: 14 }}>
               <Field label="Nombre"><input value={lnForm.nombre} onChange={e => { setLnForm(p => ({ ...p, nombre: e.target.value })); setLnError(""); }} placeholder="Nombre" style={inp} /></Field>
               <Field label="Apellido"><input value={lnForm.apellido} onChange={e => { setLnForm(p => ({ ...p, apellido: e.target.value })); setLnError(""); }} placeholder="Apellido" style={inp} /></Field>
@@ -723,12 +747,12 @@ function AdminPanel() {
             <button onClick={agregarListaNegra} style={btn("gold")}>+ Agregar a lista negra</button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {listaNegra.length === 0 && <div style={{ textAlign: "center", padding: "40px 20px", color: "#4a3a22", border: "1px dashed #2a1e0a", borderRadius: 6 }}>Lista negra vacía</div>}
+            {listaNegra.length === 0 && <div style={{ textAlign: "center", padding: "40px 20px", color: "#1a4a6a", border: "1px dashed #2a1e0a", borderRadius: 6 }}>Lista negra vacía</div>}
             {listaNegra.map(ln => (
-              <div key={ln.id} style={{ background: "#1a0a0a", border: "1px solid #4a2020", borderLeft: "3px solid #7a2020", borderRadius: 6, padding: "13px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+              <div key={ln.id} style={{ background: "#050115", border: "1px solid #4a2020", borderLeft: "3px solid #7a2020", borderRadius: 6, padding: "13px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
                 <div>
-                  <div style={{ fontSize: 15, color: "#f5e6c8", marginBottom: 2 }}>{ln.nombre} {ln.apellido}</div>
-                  <div style={{ fontSize: 12, color: "#7a6a50" }}>🪪 {ln.rut}{ln.motivo ? ` · ${ln.motivo}` : ""}</div>
+                  <div style={{ fontSize: 15, color: "#e0f4ff", marginBottom: 2 }}>{ln.nombre} {ln.apellido}</div>
+                  <div style={{ fontSize: 12, color: "#4a7a9a" }}>🪪 {ln.rut}{ln.motivo ? ` · ${ln.motivo}` : ""}</div>
                 </div>
                 <button onClick={() => setConfirmarEliminarLn(ln)} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px", color: "#9a5050", borderColor: "#4a2020" }}>Remover</button>
               </div>
@@ -740,7 +764,7 @@ function AdminPanel() {
       {tab === "intentos" && (
         <div>
           {cargandoIntentos ? <Spinner /> : intentos.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "60px 20px", color: "#4a3a22", border: "1px dashed #2a1e0a", borderRadius: 6 }}>
+            <div style={{ textAlign: "center", padding: "60px 20px", color: "#1a4a6a", border: "1px dashed #2a1e0a", borderRadius: 6 }}>
               <div style={{ fontSize: 38, marginBottom: 10 }}>🛡️</div>
               <div>Sin intentos bloqueados registrados</div>
             </div>
@@ -751,9 +775,9 @@ function AdminPanel() {
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                       {!i.visto && <span style={{ background: "#7a2020", color: "#fca5a5", fontSize: 10, padding: "2px 8px", borderRadius: 10 }}>NUEVO</span>}
-                      <span style={{ fontSize: 15, color: "#f5e6c8" }}>{i.cliente_nombre} {i.cliente_apellido}</span>
+                      <span style={{ fontSize: 15, color: "#e0f4ff" }}>{i.cliente_nombre} {i.cliente_apellido}</span>
                     </div>
-                    <div style={{ fontSize: 12, color: "#7a6a50" }}>🪪 {i.cliente_rut} &nbsp;·&nbsp; 👤 Garzón: {i.garzon_nombre} &nbsp;·&nbsp; Mesa {i.mesa_id} &nbsp;·&nbsp; {new Date(i.fecha_intento).toLocaleString("es-CL")}</div>
+                    <div style={{ fontSize: 12, color: "#4a7a9a" }}>🪪 {i.cliente_rut} &nbsp;·&nbsp; 👤 Garzón: {i.garzon_nombre} &nbsp;·&nbsp; Mesa {i.mesa_id} &nbsp;·&nbsp; {new Date(i.fecha_intento).toLocaleString("es-CL")}</div>
                     {i.fecha_reserva && <div style={{ fontSize: 12, color: "#9a5050", marginTop: 2 }}>📅 Intentó reservar para: {i.fecha_reserva}</div>}
                   </div>
                   {!i.visto && <button onClick={() => marcarVisto(i.id)} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px" }}>Marcar visto</button>}
@@ -767,14 +791,14 @@ function AdminPanel() {
       {tab === "resumen" && (
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24, flexWrap: "wrap" }}>
-            <label style={{ color: "#7a6a50", fontSize: 12, letterSpacing: 1, textTransform: "uppercase" }}>Desde:</label>
+            <label style={{ color: "#4a7a9a", fontSize: 12, letterSpacing: 1, textTransform: "uppercase" }}>Desde:</label>
             <input type="date" value={fechaResumen} onChange={e => setFechaResumen(e.target.value)} style={{ ...inp, width: "auto" }} />
-            <span style={{ fontSize: 12, color: "#5a4a30" }}>— mostrando 7 días</span>
+            <span style={{ fontSize: 12, color: "#2a5a7a" }}>— mostrando 7 días</span>
           </div>
           {cargandoResumen ? <Spinner /> : (
             <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
               <div>
-                <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 12 }}>Reservas por noche</div>
+                <div style={{ fontSize: 11, letterSpacing: 3, color: "#00d4ff", textTransform: "uppercase", marginBottom: 12 }}>Reservas por noche</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {Array.from({ length: 7 }, (_, i) => {
                     const fecha = sumarDias(fechaResumen, i);
@@ -786,10 +810,10 @@ function AdminPanel() {
                     const label = dLabel.toLocaleDateString("es-CL", { weekday: "short", day: "numeric", month: "short" });
                     return (
                       <div key={fecha} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ width: 90, fontSize: 12, color: "#7a6a50", textAlign: "right", flexShrink: 0 }}>{label}</div>
-                        <div style={{ flex: 1, height: 24, background: "#1a1508", borderRadius: 4, overflow: "hidden" }}>
-                          <div style={{ height: "100%", width: `${pct}%`, background: "#b8914a", borderRadius: 4, transition: "width 0.3s", display: "flex", alignItems: "center", paddingLeft: 8 }}>
-                            {cantidad > 0 && <span style={{ fontSize: 11, color: "#0f0e0c", fontWeight: "bold" }}>{cantidad}</span>}
+                        <div style={{ width: 90, fontSize: 12, color: "#4a7a9a", textAlign: "right", flexShrink: 0 }}>{label}</div>
+                        <div style={{ flex: 1, height: 24, background: "#031220", borderRadius: 4, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${pct}%`, background: "#00d4ff", borderRadius: 4, transition: "width 0.3s", display: "flex", alignItems: "center", paddingLeft: 8 }}>
+                            {cantidad > 0 && <span style={{ fontSize: 11, color: "#010a13", fontWeight: "bold" }}>{cantidad}</span>}
                           </div>
                         </div>
                         {cantidad === 0 && <span style={{ fontSize: 12, color: "#3a2a1a" }}>0</span>}
@@ -799,38 +823,38 @@ function AdminPanel() {
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 12 }}>Actividad por sector</div>
+                <div style={{ fontSize: 11, letterSpacing: 3, color: "#00d4ff", textTransform: "uppercase", marginBottom: 12 }}>Actividad por sector</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
                   {["Sector Isla", "Sector Pantallas", "Sector Escape", "Sector DJ"].map(zona => {
                     const cantidad = resumen.filter(r => MESAS.find(m => m.id === r.mesa_id)?.zona === zona).length;
                     const emoji = zona === "Sector Isla" ? "🏝️" : zona === "Sector Pantallas" ? "📺" : zona === "Sector Escape" ? "🚪" : "🎧";
                     return (
-                      <div key={zona} style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 8, padding: "14px 16px", textAlign: "center" }}>
+                      <div key={zona} style={{ background: "#041525", border: "1px solid #0a3a5a", borderRadius: 8, padding: "14px 16px", textAlign: "center" }}>
                         <div style={{ fontSize: 24, marginBottom: 6 }}>{emoji}</div>
-                        <div style={{ fontSize: 11, color: "#7a6a50", marginBottom: 4 }}>{zona}</div>
-                        <div style={{ fontSize: 26, fontWeight: "bold", color: "#b8914a" }}>{cantidad}</div>
-                        <div style={{ fontSize: 11, color: "#5a4a30" }}>reservas</div>
+                        <div style={{ fontSize: 11, color: "#4a7a9a", marginBottom: 4 }}>{zona}</div>
+                        <div style={{ fontSize: 26, fontWeight: "bold", color: "#00d4ff" }}>{cantidad}</div>
+                        <div style={{ fontSize: 11, color: "#2a5a7a" }}>reservas</div>
                       </div>
                     );
                   })}
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 12 }}>Ranking de garzones</div>
+                <div style={{ fontSize: 11, letterSpacing: 3, color: "#00d4ff", textTransform: "uppercase", marginBottom: 12 }}>Ranking de garzones</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {(() => {
                     const conteo = {};
                     resumen.forEach(r => { if (r.garzon) conteo[r.garzon] = (conteo[r.garzon] || 0) + 1; });
                     const ranking = Object.entries(conteo).sort((a, b) => b[1] - a[1]);
                     const maxVal = ranking[0]?.[1] || 1;
-                    if (ranking.length === 0) return <div style={{ fontSize: 13, color: "#4a3a22" }}>Sin datos de garzones aún</div>;
+                    if (ranking.length === 0) return <div style={{ fontSize: 13, color: "#1a4a6a" }}>Sin datos de garzones aún</div>;
                     return ranking.map(([nombre, cant], idx) => (
                       <div key={nombre} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ width: 24, fontSize: 13, color: idx === 0 ? "#b8914a" : "#5a4a30", textAlign: "center", fontWeight: "bold" }}>{idx + 1}</div>
-                        <div style={{ width: 120, fontSize: 13, color: "#e8dcc8", flexShrink: 0 }}>{nombre}</div>
-                        <div style={{ flex: 1, height: 22, background: "#1a1508", borderRadius: 4, overflow: "hidden" }}>
-                          <div style={{ height: "100%", width: `${Math.round((cant / maxVal) * 100)}%`, background: idx === 0 ? "#b8914a" : "#3a2e1a", borderRadius: 4, display: "flex", alignItems: "center", paddingLeft: 8 }}>
-                            <span style={{ fontSize: 11, color: idx === 0 ? "#0f0e0c" : "#7a6a50", fontWeight: "bold" }}>{cant}</span>
+                        <div style={{ width: 24, fontSize: 13, color: idx === 0 ? "#00d4ff" : "#2a5a7a", textAlign: "center", fontWeight: "bold" }}>{idx + 1}</div>
+                        <div style={{ width: 120, fontSize: 13, color: "#cceeff", flexShrink: 0 }}>{nombre}</div>
+                        <div style={{ flex: 1, height: 22, background: "#031220", borderRadius: 4, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${Math.round((cant / maxVal) * 100)}%`, background: idx === 0 ? "#00d4ff" : "#0d4a6e", borderRadius: 4, display: "flex", alignItems: "center", paddingLeft: 8 }}>
+                            <span style={{ fontSize: 11, color: idx === 0 ? "#0f0e0c" : "#4a7a9a", fontWeight: "bold" }}>{cant}</span>
                           </div>
                         </div>
                       </div>
@@ -846,22 +870,22 @@ function AdminPanel() {
       {tab === "log" && (
         <div>
           {cargandoLog ? <Spinner /> : logActividad.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "60px 20px", color: "#4a3a22", border: "1px dashed #2a1e0a", borderRadius: 6 }}>
+            <div style={{ textAlign: "center", padding: "60px 20px", color: "#1a4a6a", border: "1px dashed #2a1e0a", borderRadius: 6 }}>
               <div style={{ fontSize: 38, marginBottom: 10 }}>📋</div>
               <div>Sin actividad registrada</div>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {logActividad.map(l => (
-                <div key={l.id} style={{ background: "#15120a", border: "1px solid #2a2010", borderLeft: `3px solid ${l.accion === "CANCELACION" ? "#7a2020" : "#b8914a"}`, borderRadius: 6, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                <div key={l.id} style={{ background: "#041525", border: "1px solid #0a3a5a", borderLeft: `3px solid ${l.accion === "CANCELACION" ? "#7a2020" : "#00d4ff"}`, borderRadius: 6, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-                      <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, fontWeight: "bold", background: l.accion === "CANCELACION" ? "#7a2020" : "#2a4a2a", color: l.accion === "CANCELACION" ? "#fca5a5" : "#7ecb7e" }}>{l.accion}</span>
-                      <span style={{ fontSize: 14, color: "#f5e6c8" }}>👤 {l.garzon}</span>
+                      <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, fontWeight: "bold", background: l.accion === "CANCELACION" ? "#7a2020" : "#003a2a", color: l.accion === "CANCELACION" ? "#fca5a5" : "#00ff88" }}>{l.accion}</span>
+                      <span style={{ fontSize: 14, color: "#e0f4ff" }}>👤 {l.garzon}</span>
                     </div>
-                    <div style={{ fontSize: 12, color: "#7a6a50" }}>{l.detalle}</div>
+                    <div style={{ fontSize: 12, color: "#4a7a9a" }}>{l.detalle}</div>
                   </div>
-                  <div style={{ fontSize: 11, color: "#5a4a30" }}>{new Date(l.fecha_accion).toLocaleString("es-CL")}</div>
+                  <div style={{ fontSize: 11, color: "#2a5a7a" }}>{new Date(l.fecha_accion).toLocaleString("es-CL")}</div>
                 </div>
               ))}
             </div>
@@ -871,15 +895,15 @@ function AdminPanel() {
 
       {tab === "micuenta" && (
         <div style={{ maxWidth: 420 }}>
-          <div style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 8, padding: 24 }}>
-            <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 16 }}>Cambiar credenciales de administrador</div>
+          <div style={{ background: "#041525", border: "1px solid #0a3a5a", borderRadius: 8, padding: 24 }}>
+            <div style={{ fontSize: 11, letterSpacing: 3, color: "#00d4ff", textTransform: "uppercase", marginBottom: 16 }}>Cambiar credenciales de administrador</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <Field label="Nuevo usuario"><input value={adminForm.usuario} onChange={e => { setAdminForm(p => ({ ...p, usuario: e.target.value })); setAdminError(""); }} placeholder="Nuevo usuario" style={inp} /></Field>
               <Field label="Nueva contraseña"><input type="password" value={adminForm.password} onChange={e => { setAdminForm(p => ({ ...p, password: e.target.value })); setAdminError(""); }} placeholder="Nueva contraseña" style={inp} /></Field>
               <Field label="Confirmar contraseña"><input type="password" value={adminForm.confirmar} onChange={e => { setAdminForm(p => ({ ...p, confirmar: e.target.value })); setAdminError(""); }} placeholder="Repetir contraseña" style={inp} /></Field>
               {adminError && <div style={{ background: "#2a1010", border: "1px solid #5a2020", color: "#cb7e7e", padding: "10px 14px", borderRadius: 4, fontSize: 13 }}>{adminError}</div>}
               <button onClick={guardarAdmin} style={btn("gold")}>Guardar cambios</button>
-              <div style={{ fontSize: 12, color: "#5a4a30" }}>⚠️ Asegúrate de recordar las nuevas credenciales antes de guardar.</div>
+              <div style={{ fontSize: 12, color: "#2a5a7a" }}>⚠️ Asegúrate de recordar las nuevas credenciales antes de guardar.</div>
             </div>
           </div>
         </div>
@@ -887,10 +911,10 @@ function AdminPanel() {
 
       {confirmarEliminar && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
-          <div style={{ background: "#15120a", border: "1px solid #3a2e1a", borderRadius: 8, padding: 32, maxWidth: 380, width: "100%", textAlign: "center" }}>
+          <div style={{ background: "#041525", border: "1px solid #0d4a6e", borderRadius: 8, padding: 32, maxWidth: 380, width: "100%", textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
-            <div style={{ fontSize: 17, color: "#f5e6c8", marginBottom: 8 }}>Eliminar usuario</div>
-            <div style={{ fontSize: 14, color: "#7a6a50", marginBottom: 24 }}>¿Eliminar a <strong style={{ color: "#e8dcc8" }}>{confirmarEliminar.nombre}</strong> permanentemente?</div>
+            <div style={{ fontSize: 17, color: "#e0f4ff", marginBottom: 8 }}>Eliminar usuario</div>
+            <div style={{ fontSize: 14, color: "#4a7a9a", marginBottom: 24 }}>¿Eliminar a <strong style={{ color: "#cceeff" }}>{confirmarEliminar.nombre}</strong> permanentemente?</div>
             <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
               <button onClick={() => eliminar(confirmarEliminar)} style={btn("danger")}>Sí, eliminar</button>
               <button onClick={() => setConfirmarEliminar(null)} style={btn("ghost")}>Cancelar</button>
@@ -900,10 +924,10 @@ function AdminPanel() {
       )}
       {confirmarEliminarLn && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
-          <div style={{ background: "#15120a", border: "1px solid #3a2e1a", borderRadius: 8, padding: 32, maxWidth: 380, width: "100%", textAlign: "center" }}>
+          <div style={{ background: "#041525", border: "1px solid #0d4a6e", borderRadius: 8, padding: 32, maxWidth: 380, width: "100%", textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
-            <div style={{ fontSize: 17, color: "#f5e6c8", marginBottom: 8 }}>Remover de lista negra</div>
-            <div style={{ fontSize: 14, color: "#7a6a50", marginBottom: 24 }}>¿Remover a <strong style={{ color: "#e8dcc8" }}>{confirmarEliminarLn.nombre} {confirmarEliminarLn.apellido}</strong> de la lista negra?</div>
+            <div style={{ fontSize: 17, color: "#e0f4ff", marginBottom: 8 }}>Remover de lista negra</div>
+            <div style={{ fontSize: 14, color: "#4a7a9a", marginBottom: 24 }}>¿Remover a <strong style={{ color: "#cceeff" }}>{confirmarEliminarLn.nombre} {confirmarEliminarLn.apellido}</strong> de la lista negra?</div>
             <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
               <button onClick={() => eliminarListaNegra(confirmarEliminarLn)} style={btn("danger")}>Sí, remover</button>
               <button onClick={() => setConfirmarEliminarLn(null)} style={btn("ghost")}>Cancelar</button>
@@ -1122,7 +1146,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
       const participantesHtml = participantes.length > 0 ? `<div style="margin-top:4px;padding-left:12px;font-size:11px;color:#555">${participantes.map((p, i) => `${i + 2}. ${p.nombre} ${p.apellido} — ${p.rut}`).join("<br/>")}</div>` : "";
       return `<tr><td style="padding:8px;border-bottom:1px solid #ddd;font-weight:bold">${r.mesa_id}</td><td style="padding:8px;border-bottom:1px solid #ddd">${mesa?.zona || ""}</td><td style="padding:8px;border-bottom:1px solid #ddd"><strong>${r.nombre} ${r.apellido}</strong><br/><span style="font-size:11px;color:#666">${r.rut}</span>${participantesHtml}</td><td style="padding:8px;border-bottom:1px solid #ddd;text-align:center">${r.personas}</td><td style="padding:8px;border-bottom:1px solid #ddd;font-size:11px;color:#666">${r.nota || ""}</td><td style="padding:8px;border-bottom:1px solid #ddd;font-size:11px;color:#666">${r.garzon || ""}</td></tr>`;
     }).join("");
-    const html = `<html><head><meta charset="utf-8"><title>Reservas ${fechaSeleccionada}</title><style>body{font-family:Georgia,serif;padding:30px;color:#222}h1{font-size:22px;margin-bottom:4px}h2{font-size:14px;font-weight:normal;color:#666;margin-bottom:20px}table{width:100%;border-collapse:collapse}th{background:#1a1208;color:#f5e6c8;padding:10px 8px;text-align:left;font-size:12px;letter-spacing:1px;text-transform:uppercase}tr:nth-child(even){background:#f9f6f0}.footer{margin-top:20px;font-size:11px;color:#999}</style></head><body><h1>🔒 Reserva Segura</h1><h2>Reservas del ${fecha}${sectorSesion && sesion.rol !== "admin" ? ` · ${sectorSesion}` : ""} — ${reservasFiltradas.length} reservas</h2><table><thead><tr><th>Mesa</th><th>Sector</th><th>Titular / Participantes</th><th>Pers.</th><th>Nota</th><th>Garzón</th></tr></thead><tbody>${filas}</tbody></table><div class="footer">Generado el ${new Date().toLocaleString("es-CL")}</div></body></html>`;
+    const html = `<html><head><meta charset="utf-8"><title>Reservas ${fechaSeleccionada}</title><style>body{font-family:Georgia,serif;padding:30px;color:#222}h1{font-size:22px;margin-bottom:4px}h2{font-size:14px;font-weight:normal;color:#666;margin-bottom:20px}table{width:100%;border-collapse:collapse}th{background:#1a1208;color:#e0f4ff;padding:10px 8px;text-align:left;font-size:12px;letter-spacing:1px;text-transform:uppercase}tr:nth-child(even){background:#f9f6f0}.footer{margin-top:20px;font-size:11px;color:#999}</style></head><body><h1>🔒 Reserva Segura</h1><h2>Reservas del ${fecha}${sectorSesion && sesion.rol !== "admin" ? ` · ${sectorSesion}` : ""} — ${reservasFiltradas.length} reservas</h2><table><thead><tr><th>Mesa</th><th>Sector</th><th>Titular / Participantes</th><th>Pers.</th><th>Nota</th><th>Garzón</th></tr></thead><tbody>${filas}</tbody></table><div class="footer">Generado el ${new Date().toLocaleString("es-CL")}</div></body></html>`;
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     window.open(URL.createObjectURL(blob), "_blank");
   };
@@ -1134,31 +1158,31 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
   ];
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0f0e0c", fontFamily: "'Georgia', serif", color: "#e8dcc8" }}>
-      <div style={{ background: "linear-gradient(180deg, #1a1208 0%, #0f0e0c 100%)", borderBottom: "1px solid #3a2e1a", padding: "20px 24px 0" }}>
+    <div style={{ minHeight: "100vh", background: "#020c18", fontFamily: "'Courier New', 'Lucida Console', monospace", color: "#cceeff" }}>
+      <div style={{ background: "linear-gradient(180deg, #041a2e 0%, #020c18 100%)", borderBottom: "1px solid #0d4a6e", padding: "20px 24px 0" }}>
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
               <div>
-                <div style={{ fontSize: 10, letterSpacing: 6, color: "#b8914a", textTransform: "uppercase", marginBottom: 4 }}>Sistema de Seguridad de Reservas</div>
-                <h1 style={{ margin: 0, fontSize: 26, fontWeight: "normal", color: "#f5e6c8", letterSpacing: 1 }}>🔒 Reserva Segura</h1>
+                <div style={{ fontSize: 10, letterSpacing: 6, color: "#00d4ff", textTransform: "uppercase", marginBottom: 4 }}>Sistema de Seguridad de Reservas</div>
+                <h1 style={{ margin: 0, fontSize: 26, fontWeight: "normal", color: "#e0f4ff", letterSpacing: 1 }}>🔒 Reserva Segura</h1>
               </div>
               {sesion.rol !== "admin" && (
-                <button onClick={onCambiarSector} title="Cambiar sector" style={{ background: "none", border: "1px solid #3a2e1a", borderRadius: 6, fontSize: 20, padding: "6px 10px", color: "#b8914a", cursor: "pointer", marginTop: 6 }}>🏠</button>
+                <button onClick={onCambiarSector} title="Cambiar sector" style={{ background: "none", border: "1px solid #0d4a6e", borderRadius: 6, fontSize: 20, padding: "6px 10px", color: "#00d4ff", cursor: "pointer", marginTop: 6 }}>🏠</button>
               )}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 13, color: "#f5e6c8" }}>{sesion.nombre}</div>
-                <div style={{ fontSize: 10, color: "#7a6a50", textTransform: "uppercase", letterSpacing: 1 }}>{sesion.rol === "admin" ? "Administrador" : sectorSesion}</div>
+                <div style={{ fontSize: 13, color: "#e0f4ff" }}>{sesion.nombre}</div>
+                <div style={{ fontSize: 10, color: "#4a7a9a", textTransform: "uppercase", letterSpacing: 1 }}>{sesion.rol === "admin" ? "Administrador" : sectorSesion}</div>
               </div>
               <button onClick={() => { setVista("formulario"); setError(""); }} style={{ ...btn("gold"), padding: "8px 16px", fontSize: 13 }}>+ Nueva Reserva</button>
-              <button onClick={onLogout} style={{ ...btn("ghost"), fontSize: 12, padding: "7px 14px", color: "#7a6a50" }}>Salir</button>
+              <button onClick={onLogout} style={{ ...btn("ghost"), fontSize: 12, padding: "7px 14px", color: "#4a7a9a" }}>Salir</button>
             </div>
           </div>
           <div style={{ display: "flex", gap: 0, marginTop: 18 }}>
             {tabs.map(tab => (
-              <button key={tab.key} onClick={() => setVista(tab.key)} style={{ background: "none", border: "none", borderBottom: vista === tab.key ? "2px solid #b8914a" : "2px solid transparent", color: vista === tab.key ? "#f5e6c8" : "#7a6a50", padding: "10px 20px", cursor: "pointer", fontFamily: "'Georgia', serif", fontSize: 14 }}>
+              <button key={tab.key} onClick={() => setVista(tab.key)} style={{ background: "none", border: "none", borderBottom: vista === tab.key ? "2px solid #00d4ff" : "2px solid transparent", color: vista === tab.key ? "#e0f4ff" : "#4a7a9a", padding: "10px 20px", cursor: "pointer", fontFamily: "'Courier New', 'Lucida Console', monospace", fontSize: 14 }}>
                 {tab.label}
               </button>
             ))}
@@ -1166,28 +1190,28 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
         </div>
       </div>
 
-      {exitoMsg && <div style={{ position: "fixed", top: 20, right: 20, zIndex: 999, background: "#2a4a2a", color: "#7ecb7e", border: "1px solid #4a8a4a", padding: "12px 20px", borderRadius: 4, fontSize: 14 }}>{exitoMsg}</div>}
+      {exitoMsg && <div style={{ position: "fixed", top: 20, right: 20, zIndex: 999, background: "#003a2a", color: "#00ff88", border: "1px solid #006a4a", padding: "12px 20px", borderRadius: 4, fontSize: 14 }}>{exitoMsg}</div>}
 
       <div style={{ maxWidth: 1000, margin: "0 auto", padding: "28px 16px" }}>
 
         {vista === "dia" && (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24, flexWrap: "wrap" }}>
-              <label style={{ color: "#7a6a50", fontSize: 12, letterSpacing: 1, textTransform: "uppercase" }}>Fecha:</label>
+              <label style={{ color: "#4a7a9a", fontSize: 12, letterSpacing: 1, textTransform: "uppercase" }}>Fecha:</label>
               <input type="date" value={fechaSeleccionada} onChange={e => setFechaSeleccionada(e.target.value)} style={{ ...inp, width: "auto" }} />
               <button onClick={exportarPDF} title="Exportar PDF" style={{ background: "#7a2020", border: "none", borderRadius: 4, padding: "6px 10px", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>📄</button>
-              <span style={{ background: "#2a1e0a", border: "1px solid #3a2e1a", color: "#b8914a", padding: "5px 14px", borderRadius: 20, fontSize: 13 }}>
+              <span style={{ background: "#2a1e0a", border: "1px solid #0d4a6e", color: "#00d4ff", padding: "5px 14px", borderRadius: 20, fontSize: 13 }}>
                 {busqueda ? `${reservasFiltradas.length} de ${reservasPorSector.length} reservas` : `${reservasFiltradas.length} reservas${sectorSesion && sesion.rol !== "admin" ? ` · ${sectorSesion}` : ""}`}
               </span>
               <button onClick={cargarReservas} style={{ ...btn("ghost"), fontSize: 12, padding: "5px 12px" }}>↻ Actualizar</button>
             </div>
             <div style={{ position: "relative", marginBottom: 16 }}>
               <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar por nombre, apellido o RUT..." style={{ ...inp, paddingLeft: 36 }} />
-              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#5a4a30", fontSize: 15 }}>🔍</span>
-              {busqueda && <button onClick={() => setBusqueda("")} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#7a6a50", cursor: "pointer", fontSize: 16 }}>✕</button>}
+              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#2a5a7a", fontSize: 15 }}>🔍</span>
+              {busqueda && <button onClick={() => setBusqueda("")} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#4a7a9a", cursor: "pointer", fontSize: 16 }}>✕</button>}
             </div>
             {cargando ? <Spinner /> : reservasFiltradas.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "60px 20px", color: "#4a3a22", border: "1px dashed #2a1e0a", borderRadius: 6 }}>
+              <div style={{ textAlign: "center", padding: "60px 20px", color: "#1a4a6a", border: "1px dashed #2a1e0a", borderRadius: 6 }}>
                 <div style={{ fontSize: 38, marginBottom: 10 }}>📅</div>
                 <div>{busqueda ? `Sin resultados para "${busqueda}"` : `Sin reservas para este día${sectorSesion && sesion.rol !== "admin" ? ` en ${sectorSesion}` : ""}`}</div>
               </div>
@@ -1198,54 +1222,54 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                   const expandida = reservaExpandida === r.id;
                   const participantes = Array.isArray(r.participantes) ? r.participantes : [];
                   return (
-                    <div key={r.id} style={{ background: "#15120a", border: "1px solid #2a2010", borderLeft: "3px solid #b8914a", borderRadius: 6, overflow: "hidden" }}>
+                    <div key={r.id} style={{ background: "#041525", border: "1px solid #0a3a5a", borderLeft: "3px solid #00d4ff", borderRadius: 6, overflow: "hidden" }}>
                       <div onClick={() => setReservaExpandida(expandida ? null : r.id)} style={{ padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, cursor: "pointer" }}>
                         <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-                          <div style={{ background: "#1e1608", border: "1px solid #3a2e1a", borderRadius: 4, padding: "6px 14px", textAlign: "center", minWidth: 58 }}>
-                            <div style={{ fontSize: 16, color: "#f5e6c8", fontWeight: "bold" }}>23:30</div>
+                          <div style={{ background: "#041828", border: "1px solid #0d4a6e", borderRadius: 4, padding: "6px 14px", textAlign: "center", minWidth: 58 }}>
+                            <div style={{ fontSize: 16, color: "#e0f4ff", fontWeight: "bold" }}>23:30</div>
                           </div>
-                          <div style={{ background: "#1e1608", border: "1px solid #b8914a", borderRadius: 4, padding: "6px 14px", textAlign: "center", minWidth: 58 }}>
-                            <div style={{ fontSize: 10, color: "#b8914a", letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 }}>Mesa</div>
-                            <div style={{ fontSize: 16, color: "#f5e6c8", fontWeight: "bold" }}>{r.mesa_id}</div>
+                          <div style={{ background: "#041828", border: "1px solid #00d4ff", borderRadius: 4, padding: "6px 14px", textAlign: "center", minWidth: 58 }}>
+                            <div style={{ fontSize: 10, color: "#00d4ff", letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 }}>Mesa</div>
+                            <div style={{ fontSize: 16, color: "#e0f4ff", fontWeight: "bold" }}>{r.mesa_id}</div>
                           </div>
                           <div>
-                            <div style={{ fontSize: 15, color: "#f5e6c8", marginBottom: 3 }}>
+                            <div style={{ fontSize: 15, color: "#e0f4ff", marginBottom: 3 }}>
                               {r.nombre} {r.apellido}
-                              {participantes.length > 0 && <span style={{ marginLeft: 8, fontSize: 11, color: "#b8914a", background: "#2a1e0a", padding: "2px 8px", borderRadius: 10 }}>+{participantes.length} participante{participantes.length > 1 ? "s" : ""}</span>}
+                              {participantes.length > 0 && <span style={{ marginLeft: 8, fontSize: 11, color: "#00d4ff", background: "#2a1e0a", padding: "2px 8px", borderRadius: 10 }}>+{participantes.length} participante{participantes.length > 1 ? "s" : ""}</span>}
                             </div>
-                            <div style={{ fontSize: 12, color: "#7a6a50" }}>
+                            <div style={{ fontSize: 12, color: "#4a7a9a" }}>
                               🪪 {r.rut} &nbsp;·&nbsp; 👥 {r.personas} pers. &nbsp;·&nbsp;
-                              <span style={{ color: "#7a6a50" }}>{mesa?.zona}</span>
+                              <span style={{ color: "#4a7a9a" }}>{mesa?.zona}</span>
                               {r.garzon && <span> &nbsp;·&nbsp; 👤 {r.garzon}</span>}
                             </div>
-                            {r.nota && <div style={{ fontSize: 12, color: "#b8914a", marginTop: 3 }}>📝 {r.nota}</div>}
+                            {r.nota && <div style={{ fontSize: 12, color: "#00d4ff", marginTop: 3 }}>📝 {r.nota}</div>}
                           </div>
                         </div>
                         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                          <span style={{ fontSize: 13, color: "#5a4a30" }}>{expandida ? "▲" : "▼"}</span>
-                          <button onClick={e => { e.stopPropagation(); abrirEdicion(r); }} style={{ ...btn("ghost"), fontSize: 12, padding: "6px 14px", color: "#b8914a", borderColor: "#3a2e1a" }}>✏ Editar</button>
+                          <span style={{ fontSize: 13, color: "#2a5a7a" }}>{expandida ? "▲" : "▼"}</span>
+                          <button onClick={e => { e.stopPropagation(); abrirEdicion(r); }} style={{ ...btn("ghost"), fontSize: 12, padding: "6px 14px", color: "#00d4ff", borderColor: "#0d4a6e" }}>✏ Editar</button>
                           <button onClick={e => { e.stopPropagation(); setReservaAEliminar(r); }} style={{ ...btn("ghost"), fontSize: 12, padding: "6px 14px", color: "#9a5050", borderColor: "#4a2020" }}>Cancelar reserva</button>
                         </div>
                       </div>
                       {expandida && (
-                        <div style={{ borderTop: "1px solid #2a2010", padding: "12px 18px", background: "#0f0c06" }}>
-                          <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 10 }}>Lista de participantes</div>
+                        <div style={{ borderTop: "1px solid #0a3a5a", padding: "12px 18px", background: "#031020" }}>
+                          <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#4a7a9a", marginBottom: 10 }}>Lista de participantes</div>
                           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                             {[{ nombre: r.nombre, apellido: r.apellido, rut: r.rut, esTitular: true }, ...participantes.map(p => ({ ...p, esTitular: false }))].map((persona, idx) => (
-                              <div key={idx} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px", background: "#1a1508", borderRadius: 4, border: "1px solid #2a2010" }}>
+                              <div key={idx} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px", background: "#031220", borderRadius: 4, border: "1px solid #0a3a5a" }}>
                                 {persona.esTitular
-                                  ? <span style={{ fontSize: 10, background: "#b8914a", color: "#0f0e0c", padding: "2px 7px", borderRadius: 10, fontWeight: "bold", flexShrink: 0 }}>TITULAR</span>
-                                  : <span style={{ fontSize: 12, color: "#5a4a30", minWidth: 20, flexShrink: 0 }}>{idx + 1}.</span>
+                                  ? <span style={{ fontSize: 10, background: "#00d4ff", color: "#010a13", padding: "2px 7px", borderRadius: 10, fontWeight: "bold", flexShrink: 0 }}>TITULAR</span>
+                                  : <span style={{ fontSize: 12, color: "#2a5a7a", minWidth: 20, flexShrink: 0 }}>{idx + 1}.</span>
                                 }
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontSize: 14, color: "#f5e6c8" }}>{persona.nombre} {persona.apellido}</div>
-                                  <div style={{ fontSize: 11, color: "#7a6a50" }}>🪪 {persona.rut}</div>
+                                  <div style={{ fontSize: 14, color: "#e0f4ff" }}>{persona.nombre} {persona.apellido}</div>
+                                  <div style={{ fontSize: 11, color: "#4a7a9a" }}>🪪 {persona.rut}</div>
                                 </div>
                                 <button onClick={() => { setModalListaNegra({ persona, reservaId: r.id }); setMotivoLn(""); }} title="Agregar a lista negra"
-                                  style={{ background: "none", border: "1px solid #4a2020", borderRadius: 4, color: "#9a5050", fontSize: 11, padding: "3px 8px", cursor: "pointer", flexShrink: 0, fontFamily: "'Georgia', serif" }}>🚫</button>
+                                  style={{ background: "none", border: "1px solid #4a2020", borderRadius: 4, color: "#9a5050", fontSize: 11, padding: "3px 8px", cursor: "pointer", flexShrink: 0, fontFamily: "'Courier New', 'Lucida Console', monospace" }}>🚫</button>
                               </div>
                             ))}
-                            {participantes.length === 0 && <div style={{ fontSize: 12, color: "#4a3a22", padding: "6px 12px" }}>Sin participantes adicionales</div>}
+                            {participantes.length === 0 && <div style={{ fontSize: 12, color: "#1a4a6a", padding: "6px 12px" }}>Sin participantes adicionales</div>}
                           </div>
                         </div>
                       )}
@@ -1260,9 +1284,9 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
         {vista === "mapa" && (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16, flexWrap: "wrap" }}>
-              <label style={{ color: "#7a6a50", fontSize: 12, letterSpacing: 1, textTransform: "uppercase" }}>Fecha:</label>
+              <label style={{ color: "#4a7a9a", fontSize: 12, letterSpacing: 1, textTransform: "uppercase" }}>Fecha:</label>
               <input type="date" value={fechaSeleccionada} onChange={e => setFechaSeleccionada(e.target.value)} style={{ ...inp, width: "auto" }} />
-              <span style={{ background: "#2a1e0a", border: "1px solid #3a2e1a", color: "#7ecb7e", padding: "5px 14px", borderRadius: 20, fontSize: 13 }}>{mesasDisponibles().length} disponibles en total</span>
+              <span style={{ background: "#2a1e0a", border: "1px solid #0d4a6e", color: "#00ff88", padding: "5px 14px", borderRadius: 20, fontSize: 13 }}>{mesasDisponibles().length} disponibles en total</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 20 }}>
               {SECTORES.map(zona => {
@@ -1270,14 +1294,14 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                 const ocupadasZona = reservas.filter(r => r.fecha === fechaSeleccionada && MESAS.find(m => m.id === r.mesa_id)?.zona === zona).length;
                 const disponiblesZona = totalZona - ocupadasZona;
                 const porcentaje = Math.round((disponiblesZona / totalZona) * 100);
-                const color = porcentaje > 50 ? "#7ecb7e" : porcentaje > 20 ? "#cb9e50" : "#cb7e7e";
+                const color = porcentaje > 50 ? "#00ff88" : porcentaje > 20 ? "#0099cc" : "#cb7e7e";
                 const emoji = zona === "Sector Isla" ? "🏝️" : zona === "Sector Pantallas" ? "📺" : zona === "Sector Escape" ? "🚪" : "🎧";
                 return (
-                  <div key={zona} style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 8, padding: "12px 16px" }}>
-                    <div style={{ fontSize: 11, color: "#7a6a50", marginBottom: 6 }}>{emoji} {zona}</div>
+                  <div key={zona} style={{ background: "#041525", border: "1px solid #0a3a5a", borderRadius: 8, padding: "12px 16px" }}>
+                    <div style={{ fontSize: 11, color: "#4a7a9a", marginBottom: 6 }}>{emoji} {zona}</div>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
                       <span style={{ fontSize: 22, fontWeight: "bold", color }}>{disponiblesZona}</span>
-                      <span style={{ fontSize: 12, color: "#5a4a30" }}>/ {totalZona} disponibles</span>
+                      <span style={{ fontSize: 12, color: "#2a5a7a" }}>/ {totalZona} disponibles</span>
                     </div>
                     <div style={{ marginTop: 8, height: 4, background: "#2a2010", borderRadius: 2, overflow: "hidden" }}>
                       <div style={{ height: "100%", width: `${porcentaje}%`, background: color, borderRadius: 2, transition: "width 0.3s" }} />
@@ -1292,13 +1316,13 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
 
         {vista === "formulario" && (
           <div style={{ maxWidth: 620, margin: "0 auto" }}>
-            <h2 style={{ fontSize: 20, fontWeight: "normal", color: "#f5e6c8", marginBottom: 24, letterSpacing: 1 }}>Nueva Reserva</h2>
+            <h2 style={{ fontSize: 20, fontWeight: "normal", color: "#e0f4ff", marginBottom: 24, letterSpacing: 1 }}>Nueva Reserva</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ background: "#15120a", border: "1px solid #2a2010", borderRadius: 6, padding: 16 }}>
-                <div style={{ display: "flex", borderBottom: "1px solid #2a2010", marginBottom: 14, gap: 0 }}>
-                  <button style={{ background: "none", border: "none", borderBottom: "2px solid transparent", color: "#7a6a50", padding: "6px 14px", cursor: "pointer", fontFamily: "'Georgia', serif", fontSize: 13 }} onClick={() => setScannerAbierto(true)}>📷 Escanear cédula</button>
-                  <button style={{ background: "none", border: "none", borderBottom: "2px solid transparent", color: "#7a6a50", padding: "6px 14px", cursor: "default", fontFamily: "'Georgia', serif", fontSize: 13 }}>📋 Pegar lista</button>
-                  <span style={{ marginLeft: "auto", fontSize: 11, color: "#5a4a30", alignSelf: "center", paddingRight: 4 }}>
+              <div style={{ background: "#041525", border: "1px solid #0a3a5a", borderRadius: 6, padding: 16 }}>
+                <div style={{ display: "flex", borderBottom: "1px solid #0a3a5a", marginBottom: 14, gap: 0 }}>
+                  <button style={{ background: "none", border: "none", borderBottom: "2px solid transparent", color: "#4a7a9a", padding: "6px 14px", cursor: "pointer", fontFamily: "'Courier New', 'Lucida Console', monospace", fontSize: 13 }} onClick={() => setScannerAbierto(true)}>📷 Escanear cédula</button>
+                  <button style={{ background: "none", border: "none", borderBottom: "2px solid transparent", color: "#4a7a9a", padding: "6px 14px", cursor: "default", fontFamily: "'Courier New', 'Lucida Console', monospace", fontSize: 13 }}>📋 Pegar lista</button>
+                  <span style={{ marginLeft: "auto", fontSize: 11, color: "#2a5a7a", alignSelf: "center", paddingRight: 4 }}>
                     {personas.length > 0 ? `${personas.length}/7 escaneadas` : `${clientesParsed.length}/7 detectadas`}
                   </span>
                 </div>
@@ -1310,13 +1334,13 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                     ))}
                     {personas.length < 7 && (
                       <button onClick={() => setScannerAbierto(true)}
-                        style={{ background: "none", border: "1px dashed #3a2e1a", borderRadius: 6, color: "#7a6a50", padding: "9px", fontSize: 13, cursor: "pointer", fontFamily: "'Georgia', serif" }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = "#b8914a"; e.currentTarget.style.color = "#b8914a"; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = "#3a2e1a"; e.currentTarget.style.color = "#7a6a50"; }}>
+                        style={{ background: "none", border: "1px dashed #0d4a6e", borderRadius: 6, color: "#4a7a9a", padding: "9px", fontSize: 13, cursor: "pointer", fontFamily: "'Courier New', 'Lucida Console', monospace" }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = "#00d4ff"; e.currentTarget.style.color = "#00d4ff"; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = "#0d4a6e"; e.currentTarget.style.color = "#4a7a9a"; }}>
                         📷 Escanear siguiente cédula
                       </button>
                     )}
-                    <button onClick={() => setPersonas([])} style={{ background: "none", border: "none", color: "#5a4a30", fontSize: 11, cursor: "pointer", fontFamily: "'Georgia', serif", textAlign: "left", padding: "2px 0" }}>
+                    <button onClick={() => setPersonas([])} style={{ background: "none", border: "none", color: "#2a5a7a", fontSize: 11, cursor: "pointer", fontFamily: "'Courier New', 'Lucida Console', monospace", textAlign: "left", padding: "2px 0" }}>
                       ↩ Limpiar y usar texto en su lugar
                     </button>
                   </div>
@@ -1325,16 +1349,16 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                 {personas.length === 0 && (
                   <>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                      <label style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#b8914a" }}>Pegar lista de participantes</label>
-                      <button onClick={() => setScannerAbierto(true)} style={{ background: "#2a1e0a", border: "1px solid #b8914a", borderRadius: 5, color: "#b8914a", fontSize: 12, padding: "5px 12px", cursor: "pointer", fontFamily: "'Georgia', serif" }}>📷 Escanear cédula</button>
+                      <label style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#00d4ff" }}>Pegar lista de participantes</label>
+                      <button onClick={() => setScannerAbierto(true)} style={{ background: "#2a1e0a", border: "1px solid #00d4ff", borderRadius: 5, color: "#00d4ff", fontSize: 12, padding: "5px 12px", cursor: "pointer", fontFamily: "'Courier New', 'Lucida Console', monospace" }}>📷 Escanear cédula</button>
                     </div>
                     <textarea value={textoCliente} onChange={e => handlePasteCliente(e.target.value)} placeholder={"Juan García 12.345.678-9\nMaría López 9.876.543-2\nPedro Soto 11.222.333-4"} rows={4} style={{ ...inp, resize: "vertical", fontFamily: "monospace", fontSize: 13 }} />
-                    <div style={{ fontSize: 11, color: "#5a4a30", marginTop: 6 }}>Primera línea = titular. Las siguientes son participantes adicionales.</div>
+                    <div style={{ fontSize: 11, color: "#2a5a7a", marginTop: 6 }}>Primera línea = titular. Las siguientes son participantes adicionales.</div>
                     {clientesParsed.length > 0 && alertaListaNegra.length === 0 && (
                       <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 4 }}>
                         {clientesParsed.map((c, idx) => (
-                          <div key={idx} style={{ fontSize: 12, color: "#7ecb7e", display: "flex", gap: 8 }}>
-                            <span style={{ color: idx === 0 ? "#b8914a" : "#5a4a30" }}>{idx === 0 ? "★" : `${idx + 1}.`}</span>
+                          <div key={idx} style={{ fontSize: 12, color: "#00ff88", display: "flex", gap: 8 }}>
+                            <span style={{ color: idx === 0 ? "#00d4ff" : "#2a5a7a" }}>{idx === 0 ? "★" : `${idx + 1}.`}</span>
                             {c.nombre} {c.apellido} — {c.rut}
                           </div>
                         ))}
@@ -1344,7 +1368,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                 )}
 
                 {alertaListaNegra.length > 0 && (
-                  <div style={{ marginTop: 12, background: "#2a0808", border: "1px solid #7a1a1a", borderRadius: 4, padding: "12px 14px" }}>
+                  <div style={{ marginTop: 12, background: "#0a0120", border: "1px solid #7a1a1a", borderRadius: 4, padding: "12px 14px" }}>
                     <div style={{ fontSize: 13, color: "#f87171", fontWeight: "bold", marginBottom: 6 }}>🚫 Cliente(s) en lista negra — reserva bloqueada</div>
                     {alertaListaNegra.map((x, idx) => (
                       <div key={idx} style={{ fontSize: 12, color: "#fca5a5", marginBottom: 2 }}>
@@ -1359,17 +1383,17 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
               {(personas.length > 0 || clientesParsed.length > 0) && (() => {
                 const total = personas.length > 0 ? personas.length : clientesParsed.length;
                 return (
-                  <div style={{ background: "#15120a", border: `1px solid ${total > 5 ? "#7a2020" : "#3a5a1a"}`, borderRadius: 4, padding: "10px 14px", fontSize: 13, color: total > 5 ? "#f87171" : "#7ecb7e" }}>
+                  <div style={{ background: "#041525", border: `1px solid ${total > 5 ? "#7a2020" : "#3a5a1a"}`, borderRadius: 4, padding: "10px 14px", fontSize: 13, color: total > 5 ? "#f87171" : "#00ff88" }}>
                     👥 {total} persona{total > 1 ? "s" : ""} {personas.length > 0 ? "escaneada" : "detectada"}{total > 1 ? "s" : ""}
                     {total > 7 && <span style={{ marginLeft: 8, fontWeight: "bold" }}>— máximo 7</span>}
                   </div>
                 );
               })()}
               <div>
-                <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 8 }}>Seleccionar Mesa — haz clic en el mapa</label>
+                <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#4a7a9a", marginBottom: 8 }}>Seleccionar Mesa — haz clic en el mapa</label>
                 <FloorMap reservas={reservas} fecha={form.fecha} mesaSeleccionada={form.mesa_id ? parseInt(form.mesa_id) : null} onMesaClick={(id) => { setForm(p => ({ ...p, mesa_id: String(id) })); setError(""); }} soloZona={sesion.rol !== "admin" ? sectorSesion : null} />
                 {form.mesa_id && (
-                  <div style={{ marginTop: 10, padding: "8px 14px", background: "#1a2010", border: "1px solid #3a5a1a", borderRadius: 4, fontSize: 13, color: "#7ecb7e" }}>
+                  <div style={{ marginTop: 10, padding: "8px 14px", background: "#1a2010", border: "1px solid #3a5a1a", borderRadius: 4, fontSize: 13, color: "#00ff88" }}>
                     ✓ Mesa {form.mesa_id} seleccionada — {MESAS.find(m => m.id === parseInt(form.mesa_id))?.zona}
                   </div>
                 )}
@@ -1378,7 +1402,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                 <div style={{ display: "flex", gap: 10 }}>
                   {["Cumpleaños", "Reserva", "Evento especial"].map(opcion => (
                     <button key={opcion} onClick={() => setForm(p => ({ ...p, nota: opcion }))}
-                      style={{ flex: 1, padding: "9px 6px", borderRadius: 3, cursor: "pointer", fontFamily: "'Georgia', serif", fontSize: 13, background: form.nota === opcion ? "#b8914a" : "#1a1508", color: form.nota === opcion ? "#0f0e0c" : "#7a6a50", border: form.nota === opcion ? "1px solid #b8914a" : "1px solid #2a2010", fontWeight: form.nota === opcion ? "bold" : "normal", transition: "all 0.15s" }}>
+                      style={{ flex: 1, padding: "9px 6px", borderRadius: 3, cursor: "pointer", fontFamily: "'Courier New', 'Lucida Console', monospace", fontSize: 13, background: form.nota === opcion ? "#00d4ff" : "#1a1508", color: form.nota === opcion ? "#0f0e0c" : "#4a7a9a", border: form.nota === opcion ? "1px solid #00d4ff" : "1px solid #0a3a5a", fontWeight: form.nota === opcion ? "bold" : "normal", transition: "all 0.15s" }}>
                       {opcion}
                     </button>
                   ))}
@@ -1404,12 +1428,12 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
 
       {reservaEditando && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 150, padding: 16, overflowY: "auto" }}>
-          <div style={{ background: "#15120a", border: "1px solid #3a2e1a", borderRadius: 10, padding: 28, width: "100%", maxWidth: 560 }}>
-            <div style={{ fontSize: 11, letterSpacing: 3, color: "#b8914a", textTransform: "uppercase", marginBottom: 16 }}>Editar Reserva</div>
+          <div style={{ background: "#041525", border: "1px solid #0d4a6e", borderRadius: 10, padding: 28, width: "100%", maxWidth: 560 }}>
+            <div style={{ fontSize: 11, letterSpacing: 3, color: "#00d4ff", textTransform: "uppercase", marginBottom: 16 }}>Editar Reserva</div>
 
             {/* Selección de mesa */}
             <div style={{ marginBottom: 20 }}>
-              <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 8 }}>Mesa — haz clic para cambiar</label>
+              <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#4a7a9a", marginBottom: 8 }}>Mesa — haz clic para cambiar</label>
               <FloorMap
                 reservas={reservas}
                 fecha={reservaEditando.fecha}
@@ -1418,7 +1442,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                 soloZona={sesion.rol !== "admin" ? sectorSesion : null}
               />
               {editForm.mesa_id && (
-                <div style={{ marginTop: 8, padding: "6px 12px", background: "#1a2010", border: "1px solid #3a5a1a", borderRadius: 4, fontSize: 13, color: "#7ecb7e" }}>
+                <div style={{ marginTop: 8, padding: "6px 12px", background: "#1a2010", border: "1px solid #3a5a1a", borderRadius: 4, fontSize: 13, color: "#00ff88" }}>
                   ✓ Mesa {editForm.mesa_id} seleccionada — {MESAS.find(m => m.id === parseInt(editForm.mesa_id))?.zona}
                 </div>
               )}
@@ -1426,11 +1450,11 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
 
             {/* Editar participantes */}
             <div style={{ marginBottom: 20 }}>
-              <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 8 }}>Participantes ({editForm.participantes.length}/7)</label>
+              <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#4a7a9a", marginBottom: 8 }}>Participantes ({editForm.participantes.length}/7)</label>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {editForm.participantes.map((p, idx) => (
-                  <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center", background: "#0f0c06", border: `1px solid ${idx === 0 ? "#b8914a" : "#2a2010"}`, borderRadius: 6, padding: "8px 12px" }}>
-                    <span style={{ fontSize: 10, background: idx === 0 ? "#b8914a" : "#2a2010", color: idx === 0 ? "#0f0e0c" : "#7a6a50", padding: "2px 7px", borderRadius: 10, fontWeight: "bold", flexShrink: 0 }}>
+                  <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center", background: "#031020", border: `1px solid ${idx === 0 ? "#00d4ff" : "#2a2010"}`, borderRadius: 6, padding: "8px 12px" }}>
+                    <span style={{ fontSize: 10, background: idx === 0 ? "#00d4ff" : "#2a2010", color: idx === 0 ? "#0f0e0c" : "#4a7a9a", padding: "2px 7px", borderRadius: 10, fontWeight: "bold", flexShrink: 0 }}>
                       {idx === 0 ? "TITULAR" : `${idx + 1}`}
                     </span>
                     <input value={p.nombre} onChange={e => { const np = [...editForm.participantes]; np[idx] = { ...np[idx], nombre: e.target.value }; setEditForm(f => ({ ...f, participantes: np })); }} placeholder="Nombre" style={{ ...inp, flex: 1, padding: "5px 8px", fontSize: 12 }} />
@@ -1445,11 +1469,11 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                 {editForm.participantes.length < 7 && (
                   <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={() => setEditForm(f => ({ ...f, participantes: [...f.participantes, { nombre: "", apellido: "", rut: "" }] }))}
-                      style={{ flex: 1, background: "none", border: "1px dashed #3a2e1a", borderRadius: 6, color: "#7a6a50", padding: "8px", fontSize: 13, cursor: "pointer", fontFamily: "'Georgia', serif" }}>
+                      style={{ flex: 1, background: "none", border: "1px dashed #0d4a6e", borderRadius: 6, color: "#4a7a9a", padding: "8px", fontSize: 13, cursor: "pointer", fontFamily: "'Courier New', 'Lucida Console', monospace" }}>
                       + Agregar participante
                     </button>
                     <button onClick={() => setScannerEditando(true)}
-                      style={{ background: "#2a1e0a", border: "1px solid #b8914a", borderRadius: 6, color: "#b8914a", padding: "8px 14px", fontSize: 13, cursor: "pointer", fontFamily: "'Georgia', serif" }}>
+                      style={{ background: "#2a1e0a", border: "1px solid #00d4ff", borderRadius: 6, color: "#00d4ff", padding: "8px 14px", fontSize: 13, cursor: "pointer", fontFamily: "'Courier New', 'Lucida Console', monospace" }}>
                       📷 Escanear
                     </button>
                   </div>
@@ -1467,17 +1491,17 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
 
       {modalListaNegra && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 150, padding: 16 }}>
-          <div style={{ background: "#15120a", border: "1px solid #5a2020", borderRadius: 10, padding: 28, width: "100%", maxWidth: 400 }}>
+          <div style={{ background: "#041525", border: "1px solid #5a2020", borderRadius: 10, padding: 28, width: "100%", maxWidth: 400 }}>
             <div style={{ fontSize: 11, letterSpacing: 3, color: "#cb7e7e", textTransform: "uppercase", marginBottom: 16 }}>Agregar a lista negra</div>
-            <div style={{ background: "#1a0808", border: "1px solid #4a2020", borderRadius: 6, padding: "12px 14px", marginBottom: 16 }}>
-              <div style={{ fontSize: 15, color: "#f5e6c8", marginBottom: 4 }}>{modalListaNegra.persona.nombre} {modalListaNegra.persona.apellido}</div>
-              <div style={{ fontSize: 12, color: "#7a6a50" }}>🪪 {modalListaNegra.persona.rut}</div>
+            <div style={{ background: "#050115", border: "1px solid #4a2020", borderRadius: 6, padding: "12px 14px", marginBottom: 16 }}>
+              <div style={{ fontSize: 15, color: "#e0f4ff", marginBottom: 4 }}>{modalListaNegra.persona.nombre} {modalListaNegra.persona.apellido}</div>
+              <div style={{ fontSize: 12, color: "#4a7a9a" }}>🪪 {modalListaNegra.persona.rut}</div>
             </div>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7a6a50", marginBottom: 6 }}>Motivo (opcional)</label>
+              <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#4a7a9a", marginBottom: 6 }}>Motivo (opcional)</label>
               <input value={motivoLn} onChange={e => setMotivoLn(e.target.value)} placeholder="Ej: Conducta agresiva, pelea..." style={inp} autoFocus />
             </div>
-            <div style={{ fontSize: 11, color: "#5a4a30", marginBottom: 20 }}>⚠️ Solo el administrador puede remover personas de la lista negra.</div>
+            <div style={{ fontSize: 11, color: "#2a5a7a", marginBottom: 20 }}>⚠️ Solo el administrador puede remover personas de la lista negra.</div>
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={agregarAListaNegra} disabled={cargandoLn} style={{ ...btn("danger"), flex: 1, opacity: cargandoLn ? 0.6 : 1 }}>
                 {cargandoLn ? "Agregando..." : "🚫 Agregar a lista negra"}
@@ -1490,10 +1514,10 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
 
       {reservaAEliminar && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
-          <div style={{ background: "#15120a", border: "1px solid #3a2e1a", borderRadius: 8, padding: 32, maxWidth: 400, width: "100%", textAlign: "center" }}>
+          <div style={{ background: "#041525", border: "1px solid #0d4a6e", borderRadius: 8, padding: 32, maxWidth: 400, width: "100%", textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 14 }}>⚠️</div>
-            <div style={{ fontSize: 17, color: "#f5e6c8", marginBottom: 8 }}>Cancelar reserva</div>
-            <div style={{ fontSize: 14, color: "#7a6a50", marginBottom: 24 }}>¿Cancelar la reserva de <strong style={{ color: "#e8dcc8" }}>{reservaAEliminar.nombre} {reservaAEliminar.apellido}</strong>?</div>
+            <div style={{ fontSize: 17, color: "#e0f4ff", marginBottom: 8 }}>Cancelar reserva</div>
+            <div style={{ fontSize: 14, color: "#4a7a9a", marginBottom: 24 }}>¿Cancelar la reserva de <strong style={{ color: "#cceeff" }}>{reservaAEliminar.nombre} {reservaAEliminar.apellido}</strong>?</div>
             <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
               <button onClick={cancelarReserva} style={btn("danger")}>Sí, cancelar</button>
               <button onClick={() => setReservaAEliminar(null)} style={btn("ghost")}>Volver</button>
