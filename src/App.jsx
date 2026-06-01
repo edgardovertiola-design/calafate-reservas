@@ -1222,7 +1222,7 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
                   const expandida = reservaExpandida === r.id;
                   const participantes = Array.isArray(r.participantes) ? r.participantes : [];
                   return (
-                    <div key={r.id} style={{ background: "#041525", border: "1px solid #0a3a5a", borderLeft: "3px solid #00d4ff", borderRadius: 6, overflow: "hidden" }}>
+                    <div key={r.id} style={{ background: expandida ? "#001a35" : "#041525", border: `1px solid ${expandida ? "#00d4ff" : "#0a3a5a"}`, borderLeft: "3px solid #00d4ff", borderRadius: 6, overflow: "hidden", boxShadow: expandida ? "0 0 20px rgba(0,212,255,0.25)" : "none", transition: "all 0.2s" }}>
                       <div onClick={() => setReservaExpandida(expandida ? null : r.id)} style={{ padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, cursor: "pointer" }}>
                         <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
                           <div style={{ background: "#041828", border: "1px solid #0d4a6e", borderRadius: 4, padding: "6px 14px", textAlign: "center", minWidth: 58 }}>
