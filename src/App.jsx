@@ -995,11 +995,46 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
 
   const mesasDisponibles = () => { const ocupadas = reservas.map(r => r.mesa_id); return MESAS.filter(m => !ocupadas.includes(m.id)); };
 
-  const onScanResult = (data) => {
+  const onScanResult = async (data) => {
     setScannerAbierto(false);
     if (personas.some(p => normalizarRut(p.rut) === normalizarRut(data.run))) return;
     if (personas.length >= 7) return;
-    setPersonas(prev => [...prev, { nombre: data.nombre || "", apellido: data.apellido || "", rut: data.run }]);
+
+    let nombre = data.nombre || "";
+    let apellido = data.apellido || "";
+
+    // Si el QR no trae nombre completo, buscar en reservas anteriores
+    if (!nombre || !apellido) {
+      try {
+        const rutNorm = normalizarRut(data.run);
+        const historico = await db.get("reservas", `rut=eq.${data.run}&select=nombre,apellido&order=id.desc&limit=1`);
+        if (Array.isArray(historico) && historico.length > 0) {
+          nombre = historico[0].nombre || nombre;
+          apellido = historico[0].apellido || apellido;
+        } else {
+          // Buscar también en participantes
+          const todasReservas = await db.get("reservas", `select=nombre,apellido,rut,participantes&order=id.desc&limit=50`);
+          if (Array.isArray(todasReservas)) {
+            for (const r of todasReservas) {
+              if (normalizarRut(r.rut) === normalizarRut(data.run)) {
+                nombre = r.nombre || nombre;
+                apellido = r.apellido || apellido;
+                break;
+              }
+              const parts = Array.isArray(r.participantes) ? r.participantes : [];
+              const match = parts.find(p => normalizarRut(p.rut) === normalizarRut(data.run));
+              if (match) {
+                nombre = match.nombre || nombre;
+                apellido = match.apellido || apellido;
+                break;
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+
+    setPersonas(prev => [...prev, { nombre, apellido, rut: data.run }]);
   };
 
   const editarPersona = (idx, nombre, apellido) => { setPersonas(prev => prev.map((p, i) => i === idx ? { ...p, nombre, apellido } : p)); };
@@ -1094,11 +1129,43 @@ function ReservasApp({ sesion, sectorSesion, onLogout, onCambiarSector }) {
     flash(`${persona.nombre} ${persona.apellido} agregado a lista negra.`);
   };
 
-  const onScanResultEdicion = (data) => {
+  const onScanResultEdicion = async (data) => {
     setScannerEditando(false);
     if (editForm.participantes.some(p => normalizarRut(p.rut) === normalizarRut(data.run))) return;
     if (editForm.participantes.length >= 7) return;
-    setEditForm(f => ({ ...f, participantes: [...f.participantes, { nombre: data.nombre || "", apellido: data.apellido || "", rut: data.run }] }));
+
+    let nombre = data.nombre || "";
+    let apellido = data.apellido || "";
+
+    if (!nombre || !apellido) {
+      try {
+        const historico = await db.get("reservas", `rut=eq.${data.run}&select=nombre,apellido&order=id.desc&limit=1`);
+        if (Array.isArray(historico) && historico.length > 0) {
+          nombre = historico[0].nombre || nombre;
+          apellido = historico[0].apellido || apellido;
+        } else {
+          const todasReservas = await db.get("reservas", `select=nombre,apellido,rut,participantes&order=id.desc&limit=50`);
+          if (Array.isArray(todasReservas)) {
+            for (const r of todasReservas) {
+              if (normalizarRut(r.rut) === normalizarRut(data.run)) {
+                nombre = r.nombre || nombre;
+                apellido = r.apellido || apellido;
+                break;
+              }
+              const parts = Array.isArray(r.participantes) ? r.participantes : [];
+              const match = parts.find(p => normalizarRut(p.rut) === normalizarRut(data.run));
+              if (match) {
+                nombre = match.nombre || nombre;
+                apellido = match.apellido || apellido;
+                break;
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+
+    setEditForm(f => ({ ...f, participantes: [...f.participantes, { nombre, apellido, rut: data.run }] }));
   };
 
   const abrirEdicion = (r) => {
