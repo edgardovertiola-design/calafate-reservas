@@ -45,35 +45,44 @@ const MESAS = [
 ];
 
 const MESA_POS = {
-  // Sector Isla (columna derecha)
-  1:  { x: 93, y: 95 }, 2:  { x: 87, y: 88 },
-  3:  { x: 93, y: 78 }, 4:  { x: 87, y: 68 },
-  5:  { x: 93, y: 58 }, 6:  { x: 87, y: 48 },
-  7:  { x: 93, y: 38 }, 8:  { x: 87, y: 28 },
-  // Sector Pantallas (dos filas horizontales)
-  9:  { x: 78, y: 20 }, 10: { x: 72, y: 20 }, 11: { x: 66, y: 24 },
-  12: { x: 60, y: 20 }, 13: { x: 54, y: 24 }, 14: { x: 48, y: 20 },
-  15: { x: 42, y: 24 }, 16: { x: 36, y: 20 }, 17: { x: 33, y: 24 },
-  18: { x: 27, y: 20 }, 19: { x: 24, y: 24 }, 20: { x: 21, y: 20 },
-  21: { x: 18, y: 24 }, 22: { x: 14, y: 20 },
+  // Sector Isla (forma de U)
+  7:  { x: 90, y: 26 }, 8:  { x: 95, y: 33 },
+  6:  { x: 85, y: 33 }, 1:  { x: 95, y: 54 },
+  5:  { x: 85, y: 47 }, 2:  { x: 95, y: 61 },
+  4:  { x: 85, y: 61 }, 3:  { x: 90, y: 68 },
+  // Sector Pantallas (2 filas de 7 mesas centradas)
+  22: { x: 23, y: 14 }, 20: { x: 31, y: 14 }, 18: { x: 39, y: 14 }, 16: { x: 47, y: 14 }, 14: { x: 55, y: 14 }, 12: { x: 63, y: 14 }, 10: { x: 71, y: 14 },
+  21: { x: 23, y: 19 }, 19: { x: 31, y: 19 }, 17: { x: 39, y: 19 }, 15: { x: 47, y: 19 }, 13: { x: 55, y: 19 }, 11: { x: 63, y: 19 }, 9: { x: 71, y: 19 },
   // Sector Escape
-  23: { x: 26, y: 32 },
-  24: { x: 26, y: 41 }, 25: { x: 20, y: 41 }, 26: { x: 13, y: 41 },
-  27: { x: 26, y: 50 }, 28: { x: 20, y: 50 }, 29: { x: 13, y: 50 },
-  30: { x: 26, y: 58 }, 31: { x: 20, y: 58 }, 32: { x: 13, y: 58 },
-  33: { x: 20, y: 66 }, 34: { x: 13, y: 66 },
-  35: { x: 20, y: 74 },
+  23: { x: 25, y: 28 },
+  24: { x: 25, y: 37 }, 25: { x: 18, y: 37 }, 26: { x: 11, y: 37 },
+  27: { x: 25, y: 46 }, 28: { x: 18, y: 46 }, 29: { x: 11, y: 46 },
+  30: { x: 25, y: 55 }, 31: { x: 18, y: 55 }, 32: { x: 11, y: 55 },
+  33: { x: 25, y: 64 }, 34: { x: 18, y: 64 }, 35: { x: 11, y: 64 },
   // Sector DJ
-  36: { x: 20, y: 82 }, 37: { x: 20, y: 90 },
-  38: { x: 13, y: 86 }, 39: { x: 13, y: 94 },
-  40: { x: 28, y: 82 }, 41: { x: 28, y: 90 },
-  42: { x: 28, y: 97 }, 43: { x: 28, y: 105 },
-  44: { x: 36, y: 82 }, 45: { x: 36, y: 90 }, 46: { x: 36, y: 97 },
-  47: { x: 44, y: 82 }, 48: { x: 44, y: 90 }, 49: { x: 52, y: 82 },
-  50: { x: 52, y: 90 }, 51: { x: 44, y: 97 },
-  52: { x: 61, y: 86 }, 53: { x: 61, y: 93 }, 54: { x: 61, y: 100 },
-  55: { x: 70, y: 82 }, 56: { x: 70, y: 90 }, 57: { x: 70, y: 97 },
-  58: { x: 79, y: 86 },
+  36: { x: 18, y: 79 },
+  37: { x: 28, y: 79 },
+  38: { x: 38, y: 79 },
+  39: { x: 48, y: 79 },
+  40: { x: 58, y: 79 },
+  41: { x: 68, y: 79 },
+  42: { x: 78, y: 79 },
+  43: { x: 88, y: 79 },
+  44: { x: 18, y: 88 },
+  45: { x: 28, y: 88 },
+  46: { x: 38, y: 88 },
+  47: { x: 48, y: 88 },
+  48: { x: 58, y: 88 },
+  49: { x: 68, y: 88 },
+  50: { x: 78, y: 88 },
+  51: { x: 88, y: 88 },
+  52: { x: 23, y: 97 },
+  53: { x: 33, y: 97 },
+  54: { x: 43, y: 97 },
+  55: { x: 53, y: 97 },
+  56: { x: 63, y: 97 },
+  57: { x: 73, y: 97 },
+  58: { x: 83, y: 97 },
 };
 
 const SECTORES = ["Sector Isla", "Sector Pantallas", "Sector Escape", "Sector DJ"];
@@ -467,7 +476,7 @@ function FloorMap({ reservas, fecha, onMesaClick, mesaSeleccionada, soloZona }) 
         <div style={{ position: "absolute", top: "20%", right: "2%", width: "16%", height: "55%", background: "rgba(192,38,160,0.25)", border: "1px solid rgba(192,38,160,0.5)", borderRadius: 6 }}>
           <span style={{ position: "absolute", top: 6, left: 4, fontSize: 9, color: "#f0abfc", textTransform: "uppercase", letterSpacing: 1 }}>Sector<br />Isla</span>
         </div>
-        <div style={{ position: "absolute", top: "25%", left: "28%", width: "48%", height: "38%", background: "rgba(80,80,80,0.15)", border: "1px dashed rgba(150,150,150,0.2)", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ position: "absolute", top: "25%", left: "30%", width: "48%", height: "38%", background: "rgba(80,80,80,0.15)", border: "1px dashed rgba(150,150,150,0.2)", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <span style={{ fontSize: 11, color: "rgba(200,200,200,0.3)", letterSpacing: 4, textTransform: "uppercase" }}>General</span>
         </div>
         <div style={{ position: "absolute", top: "22%", left: "2%", width: "26%", height: "45%", background: "rgba(37,99,235,0.25)", border: "1px solid rgba(37,99,235,0.4)", borderRadius: 6 }}>
@@ -476,7 +485,7 @@ function FloorMap({ reservas, fecha, onMesaClick, mesaSeleccionada, soloZona }) 
         <div style={{ position: "absolute", top: "63%", left: "2%", width: "12%", height: "7%", background: "rgba(34,197,94,0.4)", border: "1px solid #22c55e", borderRadius: 3, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <span style={{ fontSize: 7, color: "#86efac", textAlign: "center" }}>Salida<br />Emerg.</span>
         </div>
-        <div style={{ position: "absolute", top: "63%", left: "28%", width: "35%", height: "12%", background: "rgba(30,58,138,0.5)", border: "1px solid rgba(59,130,246,0.4)", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ position: "absolute", top: "63%", left: "35%", width: "35%", height: "12%", background: "rgba(30,58,138,0.5)", border: "1px solid rgba(59,130,246,0.4)", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <span style={{ fontSize: 10, color: "#93c5fd", letterSpacing: 3, textTransform: "uppercase" }}>Sector DJ</span>
         </div>
         <div style={{ position: "absolute", top: "72%", left: "0%", width: "12%", height: "26%", background: "rgba(168,85,247,0.2)", border: "1px solid rgba(168,85,247,0.3)", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center" }}>
