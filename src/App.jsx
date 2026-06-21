@@ -40,8 +40,8 @@ const MESAS = [
   { id: 7,  capacidad: 5, zona: "Sector Isla" },
   { id: 8,  capacidad: 5, zona: "Sector Isla" },
   ...Array.from({ length: 14 }, (_, i) => ({ id: i + 9,  capacidad: 5, zona: "Sector Pantallas" })),
-  ...Array.from({ length: 12 }, (_, i) => ({ id: i + 23, capacidad: 5, zona: "Sector Escape" })),
-  ...Array.from({ length: 22 }, (_, i) => ({ id: i + 35, capacidad: 5, zona: "Sector DJ" })),
+  ...Array.from({ length: 13 }, (_, i) => ({ id: i + 23, capacidad: 5, zona: "Sector Escape" })),
+  ...Array.from({ length: 23 }, (_, i) => ({ id: i + 36, capacidad: 5, zona: "Sector DJ" })),
 ];
 
 const MESA_POS = {
@@ -57,16 +57,17 @@ const MESA_POS = {
   24: { x: 30, y: 35 }, 25: { x: 23, y: 35 }, 26: { x: 16, y: 35 },
   27: { x: 30, y: 43 }, 28: { x: 23, y: 43 }, 29: { x: 16, y: 43 },
   30: { x: 30, y: 52 }, 31: { x: 23, y: 52 }, 32: { x: 16, y: 52 },
-  33: { x: 23, y: 61 }, 34: { x: 16, y: 61 },
-  35: { x: 24, y: 72 }, 36: { x: 24, y: 79 },
-  37: { x: 17, y: 83 }, 38: { x: 17, y: 91 },
-  39: { x: 31, y: 72 }, 40: { x: 31, y: 79 },
-  41: { x: 31, y: 87 }, 42: { x: 31, y: 95 },
-  43: { x: 40, y: 79 }, 44: { x: 40, y: 87 }, 45: { x: 40, y: 95 },
-  46: { x: 50, y: 79 }, 47: { x: 50, y: 87 }, 48: { x: 60, y: 79 },
-  49: { x: 60, y: 87 }, 50: { x: 50, y: 95 },
-  51: { x: 70, y: 81 }, 52: { x: 70, y: 89 }, 53: { x: 70, y: 97 },
-  54: { x: 80, y: 79 }, 55: { x: 80, y: 88 }, 56: { x: 80, y: 97 },
+  33: { x: 23, y: 61 }, 34: { x: 16, y: 61 }, 35: { x: 24, y: 68 },
+  36: { x: 24, y: 72 }, 37: { x: 24, y: 79 },
+  38: { x: 17, y: 83 }, 39: { x: 17, y: 91 },
+  40: { x: 31, y: 72 }, 41: { x: 31, y: 79 },
+  42: { x: 31, y: 87 }, 43: { x: 31, y: 95 },
+  44: { x: 40, y: 79 }, 45: { x: 40, y: 87 }, 46: { x: 40, y: 95 },
+  47: { x: 50, y: 79 }, 48: { x: 50, y: 87 }, 49: { x: 60, y: 79 },
+  50: { x: 60, y: 87 }, 51: { x: 50, y: 95 },
+  52: { x: 70, y: 81 }, 53: { x: 70, y: 89 }, 54: { x: 70, y: 97 },
+  55: { x: 80, y: 79 }, 56: { x: 80, y: 88 }, 57: { x: 80, y: 97 },
+  58: { x: 88, y: 83 },
 };
 
 const SECTORES = ["Sector Isla", "Sector Pantallas", "Sector Escape", "Sector DJ"];
